@@ -1,10 +1,11 @@
 from rl_agents.replay_memory import ReplayMemory
+from rl_agents.element import AgentService
 
 from  collections.abc import Callable
 from abc import ABC, abstractmethod
 import numpy as np
 
-class Sampler(ABC):
+class AbstractSampler(ABC, AgentService):
     def __init__(self):
         self._replay_memory : ReplayMemory = None
 
@@ -15,16 +16,9 @@ class Sampler(ABC):
     def update(self, infos : dict):
         ...
 
-    def connect(self, replay_memory : 'ReplayMemory'):
-        self._replay_memory = replay_memory
-        return self
 
-    @property
-    def replay_memory(self) -> ReplayMemory:
-        assert self._replay_memory is not None, "Please use .connect(replay_memory) to connect the sampler to the replay memory"
-        return self._replay_memory
 
-class ClassicSampler(Sampler):
+class ClassicSampler(AbstractSampler):
     def __init__(self):
         pass
     
@@ -34,18 +28,18 @@ class ClassicSampler(Sampler):
         return batch, 1
 
 
-from rl_agents.utils.sumtree import SumTree 
-class PrioritizedReplaySampler(Sampler):
+from rl_agents.utils.sumtree import SumTree
+class PrioritizedReplaySampler(AbstractSampler):
         
-    def __init__(self, length, beta_function : Callable, alpha = 0.65):
+    def __init__(self, length, alpha = 0.65):
         self.length = length
         self.alpha = alpha
-        self.beta_function = beta_function
         self.priorities = SumTree(size= self.length)
         self.last_batch = None
-
+        self.step = 0
+    
     def sample(self, batch_size : int):
-        beta = self.beta_function()
+        beta = min(1, 0.5 + 0.5*self.step/150_000)
         if beta >= 1: 
             self.replay_memory.sampler = ClassicSampler()
 
@@ -57,5 +51,7 @@ class PrioritizedReplaySampler(Sampler):
         return batch, weights
 
     def update(self, infos : dict):
+
         td_errors = infos["td_errors"]
-        self.priorities[self.batch] = (np.abs(td_errors)+ 1)**self.alpha
+        self.priorities[self.last_batch] = (np.abs(td_errors)+ 1)**self.alpha
+        self.step = infos["step"]
