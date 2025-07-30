@@ -1,6 +1,21 @@
+from rl_agents.action_model.model import ActionModel
+
 from abc import ABC, abstractmethod
+import torch
 
 class Agent(ABC):
+    def __init__(self):
+        self.elements = []
+    
+    def update(self, infos : dict):
+        for element in self.elements:
+            element.update(infos = infos)
+    
+    @property
+    @abstractmethod
+    def action_model(self) -> torch.nn.Module:
+        ...
+
     @property
     @abstractmethod
     def nb_env(self) -> int:
