@@ -1,7 +1,9 @@
+from rl_agents.service import AgentService
+
 from abc import ABC, abstractmethod
 import torch
 
-class ActionModel(ABC):
+class ActionModel(AgentService, ABC):
     @abstractmethod
     def pick_action(self, states) -> torch.Tensor:
         ...
@@ -21,6 +23,6 @@ class OTPActionModel(ActionModel):
         self.repeat[0] = states.shape[0]
         return self.returned_action.repeat(self.repeat)
     
-if __name__ == "__main__":
-    model  = OTPActionModel(nb_env=4, action= -1)
-    print(model.pick_action(None))
+# if __name__ == "__main__":
+#     model  = OTPActionModel(nb_env=4, action= -1)
+#     print(model.pick_action(None))

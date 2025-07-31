@@ -1,4 +1,4 @@
-from rl_agents.element import AgentService
+from rl_agents.agent import AgentService
 from rl_agents.action_model.model import ActionModel
 import torch
 import numpy as np
@@ -6,16 +6,16 @@ from abc import ABC, abstractmethod
 from gymnasium.spaces import Space, Discrete, Box
 
 
-class EspilonGreedyProxy(ActionModel):
+class BaseEspilonGreedyProxy(ActionModel, ABC):
     def __init__(self, action_model : ActionModel, nb_env : int, action_space : Space, q = 1 - 5E-5):
-        self.action_model = action_model
-        self.q = q
+        self.action_model = action_model.connect(self)
         self.epsilon = 1
         self.nb_env = nb_env
         self.action_space = action_space
-
+    
+    @abstractmethod
     def epsilon_function(self):
-        return max(0.001, self.q** self.agent.step)
+        ...
     
     def pick_action(self, states : torch.Tensor):
 
@@ -44,6 +44,15 @@ class EspilonGreedyProxy(ActionModel):
         self.epsilon = self.epsilon_function()
 
 
+class EspilonGreedyProxy(BaseEspilonGreedyProxy):
+    def __init__(self, q = 1 - 1E-5, *args, **kwargs):
+        self.q = q
+        self.steps = 0
+        super().__init__(*args, **kwargs)
+    
+    def epsilon_function(self):
+        self.steps += 1
+        return self.q ** self.steps
 
 if __name__ == "__main__":
     from rl_agents.dqn import DQNgent
