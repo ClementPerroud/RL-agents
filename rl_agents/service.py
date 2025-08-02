@@ -5,18 +5,23 @@ from abc import ABC, abstractmethod
 class AgentService(ABC):
     def __init__(self):
         self.training = True
-        self._childs = []
 
     def connect(self, parent_agent_service : 'AgentService'):
         self._parent = parent_agent_service
-        self._parent._childs.append(self)
+        parent_agent_service.sub_services.append(self)
         return self
+    
+    @property
+    def sub_services(self) -> list['AgentService']:
+        if not hasattr(self, "_sub_services"): self._sub_services = []
+        return self._sub_services
     
     def train(self): self.training = True
     def eval(self): self.training = False
 
-    def update(self, infos : dict):
+    def update(self, agent : dict):
         ...
+    
     
     # @property
     # def agent(self) -> 'Agent':

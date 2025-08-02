@@ -1,33 +1,50 @@
 from typing import TYPE_CHECKING
 
-from rl_agents.action_model.model import ActionModel
+from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
 from rl_agents.service import AgentService
 
 from abc import ABC, abstractmethod
 import torch
+import numpy as np
 
 
-class Agent(ActionModel, ABC):
+class AbstractAgent(
+        AbstractActionStrategy,
+        AgentService,
+        ABC):
     def __init__(self,
-            action_model : ActionModel,
-            nb_env,
+            nb_env : int,
+            action_strategy : AbstractActionStrategy,
         ):
-        self.action_model = action_model
         self.nb_env = nb_env
+        self.action_strategy = action_strategy.connect(self)
         
         self.episode = 0
         self.step = 0
 
-        self._childs = []
         self.services : set[AgentService] = set()
         self._find_services(self)
 
-    def update(self, infos : dict):
+    def update(self):
+        self.step += 1
         for element in self.services:
-            element.update(infos = infos)
+            element.update(agent = self)
 
     def _find_services(self, service : AgentService, _first = True):
         if not _first: self.services.add(service)
-        for sub_service in service._childs:
+        for sub_service in service.sub_services:
             self._find_services(service= sub_service, _first = False)
+    
+    @abstractmethod
+    def train_agent(self):
+        ...
+    
+    @abstractmethod
+    def _pick_deterministic_action(self, state: torch.Tensor) -> np.ndarray:
+        ...
+    
+    def pick_action(self, state):
+        action = self.action_strategy.pick_action(agent = self, state = state)
 
+        self.update()
+        return action

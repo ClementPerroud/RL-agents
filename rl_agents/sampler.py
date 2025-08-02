@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.replay_memory import ReplayMemory
 
-
 class AbstractSampler(AgentService, ABC):
     @abstractmethod
     def sample(self, batch_size : int, size : int) -> tuple[np.ndarray, np.ndarray]:
@@ -24,8 +23,7 @@ class RandomSampler(AbstractSampler):
         pass
     
     def sample(self, batch_size : int, size : int):
-        batch = np.random.choice(size, size = batch_size,
-                replace=False)
+        batch = np.random.choice(size, size = batch_size,replace=False)
         return batch, 1
 
 
@@ -56,3 +54,9 @@ class PrioritizedReplaySampler(AbstractSampler):
         td_errors = infos["td_errors"]
         self.priorities[self.last_batch] = (np.abs(td_errors)+ 1)**self.alpha
         self.step = infos["step"]
+
+
+
+
+
+default_sampler = RandomSampler()
