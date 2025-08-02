@@ -101,13 +101,9 @@ class DQNAgent(
         return self.q_net.forward(state, use_secondary = use_secondary)
         # Return Q Values : [batch/nb_env, nb_actions]
     
-    def Q_a(self, state : torch.Tensor, actions : torch.Tensor, use_secondary = False) -> torch.Tensor:
-        # state : [batch/nb_env, state_shape ...] ; index_actions : [batch/nb_env, actions_shape ...]
-        return (
-            self.Q(state, use_secondary= use_secondary)
-            .gather(dim = 0,  index = actions[..., None])[..., 0] # Select the values corresponding to the actions.
-        )
-        # Return Q Values : [batch/nb_env]
+    def Q_a(self, state: torch.Tensor, actions: torch.Tensor, use_secondary=False) -> torch.Tensor:
+        q_values = self.Q(state, use_secondary=use_secondary)
+        return q_values.gather(dim=1, index=actions.long().unsqueeze(1)).squeeze(1)
     
 # ---- Training
 # agent.train()

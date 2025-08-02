@@ -9,7 +9,7 @@ import functools
 class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
     def __init__(self, action_space : Space):
         self.action_space = action_space
-        self.epsilon = 1
+        self.epsilon = 1.0
     
     @abstractmethod
     def epsilon_function(self, agent : AbstractAgent):
