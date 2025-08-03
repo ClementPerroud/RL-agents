@@ -22,10 +22,15 @@ class AbstractAgent(
         self.episode = 0
         self.step = 0
 
-        self.services : set[AgentService] = set()
-        self._find_services(self)
+    @property
+    def services(self) -> set['AgentService']:
+        if not hasattr(self, "_services"): # Triggered the first call
+            # Initialize services
+            self._services = set()
+            self._find_services(self) 
+        return self._services
 
-    def update(self):
+    def update(self):        
         self.step += 1
         for element in self.services:
             element.update(agent = self)

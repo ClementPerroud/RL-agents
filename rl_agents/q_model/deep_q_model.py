@@ -6,4 +6,3 @@ from abc import ABC
 
 class AbstractDeepQNeuralNetwork(torch.nn.Module, AgentService, ABC):
     ...
-

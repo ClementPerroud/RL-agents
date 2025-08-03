@@ -23,7 +23,6 @@ class DQNAgent(
     def __init__(self, 
             nb_env : int,
             action_strategy : AbstractActionStrategy,
-            tau : int,
             gamma : float,
             n_steps : int,
             train_every : int,
@@ -37,13 +36,11 @@ class DQNAgent(
         AbstractAgent.__init__(self, nb_env = nb_env, action_strategy = action_strategy)
         self.n_steps = n_steps
         self.gamma = gamma
-        self.tau = tau
-        self.replay_memory = replay_memory
+        self.replay_memory = replay_memory.connect(self)
         self.batch_size = batch_size
         self.train_every = train_every
 
         self.q_net = q_net.connect(self)
-        self.gamma = gamma
         self.loss_fn : torch.nn.MSELoss = loss_fn
         self.loss_fn.reduction = "none"
         self.optimizer = torch.optim.Adam(params= self.q_net.parameters(), lr = 1E-3) if optimizer is None else optimizer
@@ -85,24 +82,24 @@ class DQNAgent(
             y_true += torch.where(
                 done,
                 0,
-                (self.gamma ** self.n_steps) * torch.amax(self.Q(next_state, use_secondary = True), dim = -1), # is meant to predict the end of the mathematical sequence
+                (self.gamma ** self.n_steps) * torch.amax(self.Q(next_state, target = True), dim = -1), # is meant to predict the end of the mathematical sequence
 
             )
         
         loss = (self.loss_fn(y_pred, y_true) * weight).mean()
-
         loss.backward()
+
         self.optimizer.step()
 
         return loss.item()
 
-    def Q(self, state : torch.Tensor, use_secondary = False) -> torch.Tensor:
+    def Q(self, state : torch.Tensor, target = False) -> torch.Tensor:
         # state : [batch/nb_env, state_shape ...]
-        return self.q_net.forward(state, use_secondary = use_secondary)
+        return self.q_net.forward(state, target = target)
         # Return Q Values : [batch/nb_env, nb_actions]
     
-    def Q_a(self, state: torch.Tensor, actions: torch.Tensor, use_secondary=False) -> torch.Tensor:
-        q_values = self.Q(state, use_secondary=use_secondary)
+    def Q_a(self, state: torch.Tensor, actions: torch.Tensor, target=False) -> torch.Tensor:
+        q_values = self.Q(state, target=target)
         return q_values.gather(dim=1, index=actions.long().unsqueeze(1)).squeeze(1)
     
 # ---- Training

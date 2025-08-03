@@ -16,6 +16,7 @@ class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
         ...
     
     def pick_action(self, agent :AbstractAgent, state : np.ndarray):
+        if not agent.training: agent._pick_deterministic_action(masked_state)
         if agent.nb_env == 1: state = state[None,...]
 
         # state : (nb_env, ...)
@@ -43,9 +44,10 @@ class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
 
 
 class EspilonGreedyActionStrategy(BaseEspilonGreedyActionStrategy):
-    def __init__(self, q : float, action_space : Space):
+    def __init__(self, q : float, min_epsilon : float, action_space : Space):
         super().__init__(action_space = action_space)
         self.q = q
+        self.min_epsilon = min_epsilon
     
     def epsilon_function(self, agent):
-        return self.q ** agent.step
+        return max(self.min_epsilon, self.q ** agent.step)

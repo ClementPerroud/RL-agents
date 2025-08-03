@@ -1,13 +1,13 @@
-from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
-
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from rl_agents.agent import AbstractAgent
 
 class AgentService(ABC):
     def __init__(self):
         self.training = True
 
     def connect(self, parent_agent_service : 'AgentService'):
-        self._parent = parent_agent_service
         parent_agent_service.sub_services.append(self)
         return self
     
@@ -19,7 +19,7 @@ class AgentService(ABC):
     def train(self): self.training = True
     def eval(self): self.training = False
 
-    def update(self, agent : dict):
+    def update(self, agent : 'AbstractAgent'):
         ...
     
     

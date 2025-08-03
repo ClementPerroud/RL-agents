@@ -1,11 +1,14 @@
 from rl_agents.q_model.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.q_model.double_q_net import  DoubleQNNProxy
 from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
 from rl_agents.replay_memory import ReplayMemory
+from rl_agents.sampler import PrioritizedReplaySampler
 from rl_agents.dqn import DQNAgent
 
 import torch
 import numpy as np
 import gymnasium as gym
+
 
 class QNN(AbstractDeepQNeuralNetwork):
     def __init__(self, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
@@ -29,12 +32,21 @@ action_space = env.action_space # 0 : short , 1 : long
 observation_space = env.observation_space # open, high, low, close, volume
 
 nb_env = 1
-replay_memory = ReplayMemory(length = 1E5, observation_space= observation_space)
+memory_size = 1E5
+replay_memory = ReplayMemory(
+    length = memory_size, 
+    sampler= PrioritizedReplaySampler(length= memory_size, alpha= 0.65, beta_0=0.5, duration=50_000),
+    observation_space= observation_space)
 
-
-qnn = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
+def q_net_func(): return QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
+q_net = DoubleQNNProxy(
+    q_net_func= q_net_func,
+    tau= 1000
+)
+# q_net=QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
 action_strategy = EspilonGreedyActionStrategy(
     q = 1 - 1E-4,
+    min_epsilon= 0.01,
     action_space= action_space
 )
 agent = DQNAgent(
@@ -43,11 +55,11 @@ agent = DQNAgent(
     n_steps= 1,
     train_every= 10,
     gamma=0.99,
-    tau = 1000,
     replay_memory= replay_memory,
-    q_net = qnn
+    q_net = q_net
 )
 
+print(agent.services)
 episodes = 10000
 for i in range(episodes):
     episode_rewards = 0

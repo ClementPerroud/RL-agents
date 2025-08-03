@@ -1,4 +1,4 @@
-from rl_agents.sampler import AbstractSampler, RandomSampler, default_sampler
+from rl_agents.sampler import AbstractSampler, RandomSampler
 from rl_agents.service import AgentService
 
 from abc import ABC, abstractmethod
@@ -27,7 +27,7 @@ class BaseReplayMemory(
             names : list[str],
             sizes : list[tuple],
             dtypes : list[torch.dtype],
-            sampler : AbstractSampler = default_sampler,
+            sampler : AbstractSampler,
             device : torch.DeviceObjType = None
         ):
         torch.nn.Module.__init__(self)
