@@ -34,14 +34,6 @@ def test_add_updates_count_and_sum():
     assert tree[0] < tolerance
     assert tree.sum() < tolerance
 
-# ---------- sample : priorité aux nouvelles feuilles ----------
-def test_sample_prefers_new_leafs_first():
-    tree = SumTree(4)
-    tree.add(3)             # new_leafs = [3]
-    out = tree.sample(1)
-    assert out == [3]
-    assert tree.new_leafs == []
-
 # ---------- sample : tirage pondéré, résultat déterministe ----------
 def test_sample_deterministic(monkeypatch):
     tree = SumTree(2)

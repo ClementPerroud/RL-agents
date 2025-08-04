@@ -24,7 +24,6 @@ class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
         env_random_action = rands < self.epsilon
         env_model_action = ~env_random_action
         actions = np.zeros(shape = (agent.nb_env,) + self.action_space.shape) # shape (nb_env, action_shape ...)
-
         if env_model_action.any():
             masked_state = state[env_model_action] # shape (nb_env_selected,  state_shape ...)
             model_actions = agent._pick_deterministic_action(masked_state)
