@@ -1,14 +1,15 @@
 import numpy as np
-import pytest
-from rl_agents.utils.sumtree import SumTree      # adaptez si besoin
+from rl_agents.utils.sumtree import SumTree  # adaptez si besoin
 
-tolerance = 1E-6
+tolerance = 1e-6
+
 
 # ---------- état initial ----------
 def test_initial_state():
     tree = SumTree(4)
     assert tree.layer_lens == [4, 2, 1]
     assert tree.sum() < tolerance
+
 
 # ---------- __setitem__ : mise à jour simple ----------
 def test_setitem_single():
@@ -20,6 +21,7 @@ def test_setitem_single():
     assert tree.node_layers[2][0] == 5.0
     assert abs(tree.sum() - 5.0) < tolerance
 
+
 # ---------- __setitem__ : assignation vectorisée ----------
 def test_setitem_batch():
     tree = SumTree(4)
@@ -27,19 +29,21 @@ def test_setitem_batch():
     assert np.allclose(tree.node_layers[0][:2], [5.0, 3.0])
     assert abs(tree.sum() - 8.0) < tolerance
 
+
 # ---------- add() : règle des poids, count, sum ----------
 def test_add_updates_count_and_sum():
     tree = SumTree(4)
-    tree.add(0) # poids = 0 (premier élément)
+    tree.add(0)  # poids = 0 (premier élément)
     assert tree[0] < tolerance
     assert tree.sum() < tolerance
+
 
 # ---------- sample : tirage pondéré, résultat déterministe ----------
 def test_sample_deterministic(monkeypatch):
     tree = SumTree(2)
     tree[0] = 1.0
     tree[1] = 1.0
-    tree.new_leafs = []     # vider la file « fresh »
+    tree.new_leafs = []  # vider la file « fresh »
 
     # forcer rand() à 0 → cible la feuille 0
     monkeypatch.setattr(np.random, "rand", lambda n: np.zeros(n))
