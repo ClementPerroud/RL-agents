@@ -1,28 +1,32 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from rl_agents.agent import AbstractAgent
+
 
 class AgentService(ABC):
     def __init__(self):
         self.training = True
 
-    def connect(self, parent_agent_service : 'AgentService'):
+    def connect(self, parent_agent_service: "AgentService"):
         parent_agent_service.sub_services.append(self)
         return self
-    
-    @property
-    def sub_services(self) -> list['AgentService']:
-        if not hasattr(self, "_sub_services"): self._sub_services = []
-        return self._sub_services
-    
-    def train(self): self.training = True
-    def eval(self): self.training = False
 
-    def update(self, agent : 'AbstractAgent'):
-        ...
-    
-    
+    @property
+    def sub_services(self) -> list["AgentService"]:
+        if not hasattr(self, "_sub_services"):
+            self._sub_services = []
+        return self._sub_services
+
+    def train(self):
+        self.training = True
+
+    def eval(self):
+        self.training = False
+
+    def update(self, agent: "AbstractAgent"): ...
+
     # @property
     # def agent(self) -> 'Agent':
     #     try:
@@ -39,4 +43,3 @@ class AgentService(ABC):
     #         return self._parent
     #     except AttributeError as e: # Triggered if self._pagent does not exist. It meens to instance have not been connected using .connect(...)
     #         raise Exception(f"This element cannot be used without being associated with its parent. If your are developping new services, please connect the element (class : {self.__class__.__name__}) to an agent at initialization using : element.connect(agent)")
-    

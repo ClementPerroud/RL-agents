@@ -1,18 +1,20 @@
 import numpy as np
 
-epsilon = 1E-7
+epsilon = 1e-7
+
+
 class SumTree:
     def __init__(self, size):
         self.size = size
-        self.node_layers = [np.array([epsilon]*size)]
+        self.node_layers = [np.array([epsilon] * size)]
         layer_size = size
         while layer_size > 1:
-            layer_size = (layer_size + 1)//2
-            self.node_layers.append(np.array([epsilon]*layer_size))
+            layer_size = (layer_size + 1) // 2
+            self.node_layers.append(np.array([epsilon] * layer_size))
         self.layer_len = len(self.node_layers)
         self.layer_lens = [len(layer) for layer in self.node_layers]
         self.i = 0
-        
+
     def __setitem__(self, loc, value):
         if isinstance(loc, int):
             idx = loc
@@ -20,41 +22,42 @@ class SumTree:
             self.node_layers[0][idx] = value
 
             for idx_layer in range(1, self.layer_len):
-                idx = idx // 2 # Get parent index
+                idx = idx // 2  # Get parent index
                 self.node_layers[idx_layer][idx] += change
-        
-        else: # List, array ...
-            for i in range(len(loc)): self.__setitem__(loc[i], value[i])
+
+        else:  # List, array ...
+            for i in range(len(loc)):
+                self.__setitem__(loc[i], value[i])
 
     def __getitem__(self, loc):
         return self.node_layers[0][loc]
-    
+
     def add(self, value):
         i = self.i % self.size
         self[i] = value
         self.i += 1
 
     def sum(self):
-        return self.node_layers[self.layer_len -1][0]
-    
+        return self.node_layers[self.layer_len - 1][0]
+
     def sample(self, batch_size):
         batch = []
 
-        random_cumsums = np.random.rand(batch_size)*(self.sum() - epsilon/10)
+        random_cumsums = np.random.rand(batch_size) * (self.sum() - epsilon / 10)
 
         # Then, fill up the remaining batch with the standard procedure.
         for i in range(batch_size):
             cumsum = random_cumsums[i]
 
             idx = 0
-            for i_layer in range(self.layer_len-1, 0, -1):
-                left_child_index, right_child_index = idx*2, idx*2+1
-                self.node_layers[i_layer-1][left_child_index]
-                if cumsum < self.node_layers[i_layer-1][left_child_index]:
+            for i_layer in range(self.layer_len - 1, 0, -1):
+                left_child_index, right_child_index = idx * 2, idx * 2 + 1
+                self.node_layers[i_layer - 1][left_child_index]
+                if cumsum < self.node_layers[i_layer - 1][left_child_index]:
                     idx = left_child_index
                 else:
                     idx = right_child_index
-                    cumsum -= self.node_layers[i_layer-1][left_child_index]
+                    cumsum -= self.node_layers[i_layer - 1][left_child_index]
 
             batch.append(idx)
         return batch
