@@ -37,8 +37,8 @@ class PrioritizedReplaySampler(AbstractSampler):
     def __init__(self, length: int, alpha=0.65, beta_0=0.5, duration=150_000):
         self.length = int(length)
         self.alpha = alpha
-        self.beta_0 = 0.5
-        self.duration = 150_000
+        self.beta_0 = beta_0
+        self.duration = duration
         self.priorities = SumTree(size=self.length)
         self.last_batch = None
         self.step = 0
@@ -46,20 +46,22 @@ class PrioritizedReplaySampler(AbstractSampler):
 
     def sample(self, batch_size: int, size: int):
         if self.step >= self.duration:
-            return self.random_sampler.sample(batch_size=batch_size)
+            self.step += 1
+            return self.random_sampler.sample(batch_size=batch_size, size=size)
 
-        beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / 150_000)
+        beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / self.duration)
 
         batch = self.priorities.sample(batch_size)
         weights = (size * self.priorities[batch] / self.priorities.sum()) ** (-beta)
         weights = weights / np.amax(weights)
 
         self.last_batch = batch
-        return torch.Tensor(batch).long(), torch.from_numpy(weights)
+        self.step += 1
+        return torch.tensor(batch).long(), torch.from_numpy(weights)
 
     def train_callback(self, agent: "AbstractAgent", infos: dict):
         td_errors = (infos["y_true"] - infos["y_pred"]).abs().numpy()
-        self.priorities[self.last_batch] = (td_errors + 1e6) ** self.alpha
+        self.priorities[self.last_batch] = (td_errors + 1e-6) ** self.alpha
 
     @torch.no_grad()
     def store(self, agent: "AbstractAgent", **kwargs):
