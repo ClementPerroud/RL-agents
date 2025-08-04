@@ -2,18 +2,12 @@ from rl_agents.agent import AbstractAgent
 from rl_agents.replay_memory import AbstractReplayMemory
 from rl_agents.q_model.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
+from rl_agents.q_agent import AbstractQAgent
 
 import torch
 import numpy as np
 from abc import ABC, abstractmethod
 import typing
-
-class AbstractQAgent(AbstractAgent, ABC):
-    @abstractmethod
-    def Q(self, state : torch.Tensor): ...
-
-    @abstractmethod
-    def Q_a(self, state : torch.Tensor, action : torch.Tensor): ...
 
 class DQNAgent(
         torch.nn.Module,
@@ -54,7 +48,7 @@ class DQNAgent(
     
     def store(self, **kwargs):
         assert self.training, "Cannot store any memory during eval."
-        self.replay_memory.store(**kwargs)
+        self.replay_memory.store(agent = self,**kwargs)
 
     def train_agent(self) -> float:
         if self.step % self.train_every == 0:
@@ -62,6 +56,24 @@ class DQNAgent(
             if samples is None: return None
             return self.train_step(**samples)
 
+    def compute_td_errors(self,
+            state : torch.Tensor, # [batch, state_shape ...] obtained at t
+            action : torch.Tensor, # [batch] obtained at t+multi_steps
+            reward : torch.Tensor, # [batch] obtained between t+1 and t+multi_step (then summed up using discounted sum) 
+            next_state : torch.Tensor, # [batch, state_shapes ...] obtained at t+multi_steps
+            done : torch.Tensor, # [batch] obtained at t+multi_steps        
+        ):
+        y_pred = self.Q_a(state, action) # [batch/nb_env]
+        
+        with torch.no_grad():
+            y_true = reward
+            y_true += torch.where(
+                done,
+                0,
+                (self.gamma ** self.n_steps) * torch.amax(self.Q(next_state, target = True), dim = -1), # is meant to predict the end of the mathematical sequence
+
+            )
+        return y_true, y_pred
     def train_step(
         self,
         state : torch.Tensor, # [batch, state_shape ...] obtained at t
@@ -73,24 +85,15 @@ class DQNAgent(
     ):
         self.optimizer.zero_grad()
 
-        y_pred = self.Q_a(state, action) # [batch/nb_env]
+        y_true, y_pred = self.compute_td_errors(state=state, action=action, reward=reward, next_state=next_state, done=done)
 
-        if reward.ndim == 1: reward[..., None] # Handle both single step (shape : [batch]) and multi-step (shape : [batch, n_steps])
-        
-        with torch.no_grad():
-            y_true = reward
-            y_true += torch.where(
-                done,
-                0,
-                (self.gamma ** self.n_steps) * torch.amax(self.Q(next_state, target = True), dim = -1), # is meant to predict the end of the mathematical sequence
-
-            )
-        
-        loss = (self.loss_fn(y_pred, y_true) * weight).mean()
+        loss = self.loss_fn(y_pred, y_true) * weight
+        loss = loss.mean()
         loss.backward()
 
         self.optimizer.step()
 
+        with torch.no_grad():self.replay_memory.train_callback(agent=self, infos = {'y_true' : y_true, 'y_pred' : y_pred})
         return loss.item()
 
     def Q(self, state : torch.Tensor, target = False) -> torch.Tensor:
