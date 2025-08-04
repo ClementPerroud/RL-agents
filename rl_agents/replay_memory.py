@@ -1,27 +1,32 @@
 from rl_agents.sampler import AbstractSampler, RandomSampler
 from rl_agents.service import AgentService
 
+
 from abc import ABC, abstractmethod
 from collections import namedtuple, deque
 import torch
 import numpy as np
 from gymnasium.spaces import Space, Box
 
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward', 'done'))
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from rl_agents.agent import AbstractAgent
 
 class AbstractReplayMemory(AgentService, ABC):
     @abstractmethod
-    def store(self):
+    def store(self, agent : 'AbstractAgent', **kwargs):
         ...
     
     @abstractmethod
     def sample(self, batch_size : int):
         ...
 
+    def train_callback(self, agent : 'AbstractAgent', infos : torch.Tensor):
+        ...
 
 class BaseReplayMemory(
         torch.nn.Module, # Make methode .to(device) available
-        AgentService):
+        AbstractReplayMemory):
     def __init__(self,
             length : int,
             names : list[str],
@@ -52,7 +57,7 @@ class BaseReplayMemory(
         return min(self.i, self.length)
     
     @torch.no_grad()
-    def store(self, **kwargs):
+    def store(self,agent : 'AbstractAgent', **kwargs):
         """Save a transition"""
         assert len(kwargs) == self.n, f"Detected some missing elements as kwargs. Names must match : {self.names}. Currently : {self.kwargs.keys()}"
 
@@ -65,6 +70,7 @@ class BaseReplayMemory(
             except KeyError:
                 raise KeyError(f"Key {key} must be in {self.names}")
         self.i += 1
+        self.sampler.store(agent = agent,**kwargs)
 
     @torch.no_grad()
     def sample(self, batch_size : int):
@@ -77,6 +83,9 @@ class BaseReplayMemory(
         elements["weight"] = weights
         return elements
 
+    @torch.no_grad()
+    def train_callback(self, agent : 'AbstractAgent', infos : dict):
+        self.sampler.train_callback(agent = agent, infos = infos)
 
 class ReplayMemory(BaseReplayMemory):
     def __init__(self,
@@ -161,12 +170,12 @@ class MultiStepReplayMemory(BaseReplayMemory):
                 'done': done[env_id]
             })
 
-            # ① fenêtre pleine : pousse une transition n-step
+            # fenêtre pleine : pousse une transition n-step
             if len(buf) == self.multi_step:
                 super().store(**self._aggregate(buf))
                 buf.popleft() # fenêtre glissante
 
-            # ② fin d'épisode : flush des restes
+            # fin d'épisode : flush des restes
             if done[env_id]:
                 while buf:
                     super().store(**self._aggregate(buf))

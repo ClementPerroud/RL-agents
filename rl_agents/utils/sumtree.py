@@ -1,10 +1,9 @@
 import numpy as np
 
-epsilon = 1E-9
+epsilon = 1E-7
 class SumTree:
     def __init__(self, size):
         self.size = size
-        
         self.node_layers = [np.array([epsilon]*size)]
         layer_size = size
         while layer_size > 1:
@@ -12,7 +11,7 @@ class SumTree:
             self.node_layers.append(np.array([epsilon]*layer_size))
         self.layer_len = len(self.node_layers)
         self.layer_lens = [len(layer) for layer in self.node_layers]
-        self.new_leafs = []
+        self.i = 0
         
     def __setitem__(self, loc, value):
         if isinstance(loc, int):
@@ -23,28 +22,25 @@ class SumTree:
             for idx_layer in range(1, self.layer_len):
                 idx = idx // 2 # Get parent index
                 self.node_layers[idx_layer][idx] += change
+        
         else: # List, array ...
             for i in range(len(loc)): self.__setitem__(loc[i], value[i])
 
     def __getitem__(self, loc):
         return self.node_layers[0][loc]
     
-    def add(self, i):
-        self[i] = 0
-        self.new_leafs.append(i)
-
-
+    def add(self, value):
+        i = self.i % self.size
+        self[i] = value
+        self.i += 1
 
     def sum(self):
         return self.node_layers[self.layer_len -1][0]
     
     def sample(self, batch_size):
         batch = []
-        # First, we add the new_leafs so the agent trains of it first. Plus, it will initialize their priority score.
-        while len(self.new_leafs) > 0 and len(batch) < batch_size:
-            batch.append(self.new_leafs.pop(0))
-        batch_size -= len(batch)
-        random_cumsums = np.random.rand(batch_size)*(self.sum() - 1e-5)
+
+        random_cumsums = np.random.rand(batch_size)*(self.sum() - epsilon/10)
 
         # Then, fill up the remaining batch with the standard procedure.
         for i in range(batch_size):

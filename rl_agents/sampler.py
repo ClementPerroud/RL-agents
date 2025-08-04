@@ -1,3 +1,4 @@
+from rl_agents.q_agent import AbstractQAgent 
 from rl_agents.service import AgentService
 from rl_agents.utils.sumtree import SumTree
 
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.replay_memory import ReplayMemory
     from rl_agents.agent import AbstractAgent
+    
 
 class AbstractSampler(AgentService, ABC):
     @abstractmethod
@@ -18,7 +20,11 @@ class AbstractSampler(AgentService, ABC):
     def update(self, agent : 'AbstractAgent'):
         ...
 
-
+    def train_callback(self, agent : 'AbstractAgent', infos : dict):
+        ...
+    
+    def store(self, agent : 'AbstractAgent', **kwargs):
+        ...
 
 class RandomSampler(AbstractSampler):
     def __init__(self):
@@ -55,8 +61,21 @@ class PrioritizedReplaySampler(AbstractSampler):
         self.last_batch = batch
         return torch.Tensor(batch).long(), torch.from_numpy(weights)
 
-    # TODO 
-    # self.priorities[self.last_batch] = (np.abs(td_errors)+ 1)**self.alpha
-    
-    
-    # def update(self, agent : 'AbstractAgent'):
+    def train_callback(self, agent : 'AbstractAgent', infos : dict):
+        td_errors = (infos['y_true'] - infos['y_pred']).abs().numpy()
+        self.priorities[self.last_batch] = (td_errors+ 1E6)**self.alpha
+
+    @torch.no_grad()
+    def store(self, agent : 'AbstractAgent', **kwargs):
+        assert isinstance(agent, AbstractQAgent), "PrioritizedReplaySampler can only be used with QAgents"
+        
+        state = torch.Tensor([kwargs["state"]])
+        action = torch.Tensor([kwargs["action"]])
+        reward = torch.Tensor([kwargs["reward"]])
+        next_state = torch.Tensor([kwargs["next_state"]])
+        done = torch.BoolTensor([kwargs["done"]])
+
+        y_true, y_pred = agent.compute_td_errors(state= state, action = action, reward = reward, next_state = next_state, done = done)
+        self.priorities.add(
+            float((y_true - y_pred)[0].abs().numpy())
+        )

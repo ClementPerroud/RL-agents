@@ -2,7 +2,7 @@ from rl_agents.q_model.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_model.double_q_net import  DoubleQNNProxy
 from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
 from rl_agents.replay_memory import ReplayMemory
-from rl_agents.sampler import PrioritizedReplaySampler
+from rl_agents.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.dqn import DQNAgent
 
 import torch
@@ -26,16 +26,16 @@ class QNN(AbstractDeepQNeuralNetwork):
 
 
 # gym.make("LunarLander-v3")
-env = gym.make("CartPole-v1")
+env = gym.make("LunarLander-v3")
 
 action_space = env.action_space # 0 : short , 1 : long
 observation_space = env.observation_space # open, high, low, close, volume
 
 nb_env = 1
-memory_size = 1E5
+memory_size = 1E7
 replay_memory = ReplayMemory(
     length = memory_size, 
-    sampler= PrioritizedReplaySampler(length= memory_size, alpha= 0.65, beta_0=0.5, duration=50_000),
+    sampler= RandomSampler(), #PrioritizedReplaySampler(length= memory_size, alpha= 0.65, beta_0=0.5, duration=150_000),
     observation_space= observation_space)
 
 def q_net_func(): return QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
@@ -45,7 +45,7 @@ q_net = DoubleQNNProxy(
 )
 # q_net=QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
 action_strategy = EspilonGreedyActionStrategy(
-    q = 1 - 1E-4,
+    q = 1 - 1E-5,
     min_epsilon= 0.01,
     action_space= action_space
 )
@@ -59,7 +59,6 @@ agent = DQNAgent(
     q_net = q_net
 )
 
-print(agent.services)
 episodes = 10000
 for i in range(episodes):
     episode_rewards = 0
