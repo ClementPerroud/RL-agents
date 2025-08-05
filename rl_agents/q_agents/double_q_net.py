@@ -1,5 +1,5 @@
 from rl_agents.agent import AbstractAgent
-from rl_agents.q_model.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from copy import deepcopy
 import torch
 from typing import Callable

@@ -1,4 +1,4 @@
-from rl_agents.q_agent import AbstractQAgent
+from rl_agents.q_agents.q_agent import AbstractQAgent
 from rl_agents.service import AgentService
 from rl_agents.utils.sumtree import SumTree
 

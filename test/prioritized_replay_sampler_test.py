@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from rl_agents.sampler import PrioritizedReplaySampler
+from rl_agents.replay_memory.sampler import PrioritizedReplaySampler
 
 
 def test_sampler_initialization():

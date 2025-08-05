@@ -1,8 +1,8 @@
 from rl_agents.agent import AbstractAgent
-from rl_agents.replay_memory import AbstractReplayMemory
-from rl_agents.q_model.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
+from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
-from rl_agents.q_agent import AbstractQAgent
+from rl_agents.q_agents.q_agent import AbstractQAgent
 
 import torch
 import numpy as np

@@ -1,4 +1,4 @@
-from rl_agents.sampler import AbstractSampler, RandomSampler
+from rl_agents.replay_memory.sampler import AbstractSampler, RandomSampler
 from rl_agents.service import AgentService
 
 
@@ -70,12 +70,18 @@ class BaseReplayMemory(
 
         i = int(self.i % self.length)
 
-        for key, val in kwargs.items():
+        for name, val in kwargs.items():
             try:
-                # print(key, i, val, type(val), self.tensor_memories[key][i], self.tensor_memories[key].shape)
-                self.tensor_memories[key][i] = torch.from_numpy(np.array(val))
+                # print(name, i, val, type(val), self.tensor_memories[name][i], self.tensor_memories[name].shape)
+                try:
+                    index_name = self.names.index(name)
+                except ValueError as e:
+                    raise ValueError(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
+                
+                self.tensor_memories[name][i] = torch.as_tensor(val, dtype = self.dtypes[index_name])
             except KeyError:
-                raise KeyError(f"Key {key} must be in {self.names}")
+                raise KeyError(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
+        
         self.i += 1
         self.sampler.store(agent=agent, **kwargs)
 
@@ -200,7 +206,7 @@ class MultiStepReplayMemory(BaseReplayMemory):
             buf = self.buffers[env_id]
             buf.append(
                 {
-                     "state": torch.as_tensor(state[env_id]),
+                    "state": torch.as_tensor(state[env_id]),
                     "action": torch.as_tensor(action[env_id]),
                     "next_state": torch.as_tensor(next_state[env_id]),
                     "reward": torch.as_tensor(reward[env_id]),

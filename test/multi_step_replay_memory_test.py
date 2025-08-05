@@ -1,7 +1,7 @@
 import numpy as np
 from gymnasium.spaces import Box
 
-from rl_agents.replay_memory import MultiStepReplayMemory
+from rl_agents.replay_memory.replay_memory import MultiStepReplayMemory
 
 
 class DummyAgent:
