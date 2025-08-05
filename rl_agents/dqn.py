@@ -45,7 +45,7 @@ class DQNAgent(
         )
 
     def _pick_deterministic_action(self, state: torch.Tensor) -> np.ndarray:
-        return torch.argmax(self.Q(torch.Tensor(state)), dim=-1)
+        return torch.argmax(self.Q(torch.as_tensor(state)), dim=-1).detach().cpu().numpy()
 
     def sample(self):
         return self.replay_memory.sample(batch_size=self.batch_size)

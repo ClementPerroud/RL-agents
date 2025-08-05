@@ -3,7 +3,11 @@ from rl_agents.service import AgentService
 from abc import ABC, abstractmethod
 import numpy as np
 
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from rl_agents.agent import AbstractAgent
+    
 class AbstractActionStrategy(AgentService, ABC):
     @abstractmethod
     def pick_action(self, state: np.ndarray) -> np.ndarray: ...

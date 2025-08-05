@@ -8,17 +8,19 @@ from typing import Callable
 class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
     def __init__(
         self,
-        q_net_func: Callable[[None], AbstractDeepQNeuralNetwork],
+        q_net : 'AbstractDeepQNeuralNetwork',
         tau: int,
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.tau = tau
-        self.q_net: AbstractDeepQNeuralNetwork = q_net_func()
+        self.q_net: AbstractDeepQNeuralNetwork = q_net
         self.q_net_target: AbstractDeepQNeuralNetwork = deepcopy(self.q_net)
+
         self.q_net = self.q_net.connect(self)
         self.q_net_target = self.q_net_target.connect(self)
+        
         self.q_net_target.requires_grad_(False)
 
     def forward(self, *args, target: bool = False, **kwargs):

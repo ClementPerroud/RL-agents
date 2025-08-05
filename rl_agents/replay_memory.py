@@ -191,7 +191,7 @@ class MultiStepReplayMemory(BaseReplayMemory):
 
     # ---- API publique ----------------------------------------------
     @torch.no_grad()
-    def store(self, *, state, action, next_state, reward, done):
+    def store(self,  agent: "AbstractAgent", *, state, action, next_state, reward, done):
         """
         `state`, `action`, … : tenseurs dont la 0-ème dim = num_envs.
         """
@@ -200,21 +200,21 @@ class MultiStepReplayMemory(BaseReplayMemory):
             buf = self.buffers[env_id]
             buf.append(
                 {
-                    "state": state[env_id],
-                    "action": action[env_id],
-                    "next_state": next_state[env_id],
-                    "reward": reward[env_id],
-                    "done": done[env_id],
+                     "state": torch.as_tensor(state[env_id]),
+                    "action": torch.as_tensor(action[env_id]),
+                    "next_state": torch.as_tensor(next_state[env_id]),
+                    "reward": torch.as_tensor(reward[env_id]),
+                    "done": torch.as_tensor(bool(done[env_id])),
                 }
             )
 
             # fenêtre pleine : pousse une transition n-step
             if len(buf) == self.multi_step:
-                super().store(**self._aggregate(buf))
+                super().store(agent=agent, **self._aggregate(buf))
                 buf.popleft()  # fenêtre glissante
 
             # fin d'épisode : flush des restes
             if done[env_id]:
                 while buf:
-                    super().store(**self._aggregate(buf))
+                    super().store(agent=agent, **self._aggregate(buf))
                     buf.popleft()
