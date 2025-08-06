@@ -36,17 +36,17 @@ def main():
     observation_space = env.observation_space # open, high, low, close, volume
 
     nb_env = 1
-    memory_size = 1E8
+    memory_size = 1E7
     replay_memory = ReplayMemory(
         length = memory_size, 
         sampler= RandomSampler(),
         observation_space= observation_space)
 
-    q_net=QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
-    # q_net = DoubleQNNProxy(
-    #     q_net = q_net,
-    #     tau= 1000
-    # )
+    q_net_generator = lambda : QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
+    q_net = DoubleQNNProxy(
+        q_net_generator = q_net_generator,
+        tau= 1000
+    )
     action_strategy = EspilonGreedyActionStrategy(
         q = 1 - 5E-4,
         min_epsilon= 0.01,
@@ -55,12 +55,12 @@ def main():
     agent = DQNAgent(
         nb_env= nb_env,
         action_strategy= action_strategy,
-        n_steps= 1,
-        train_every= 10,
+        train_every= 1,
         gamma=0.99,
         replay_memory= replay_memory,
         q_net = q_net,
-        optimizer= torch.optim.Adam(q_net.parameters(), lr = 1E-3)
+        optimizer= torch.optim.Adam(q_net.parameters(), lr = 1E-4),
+        loss_fn= torch.nn.SmoothL1Loss()
     )
 
     episodes = 1000
@@ -89,7 +89,7 @@ def main():
         epsilon = action_strategy.epsilon
         episode_loss = np.array(episode_losses).mean()
         print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:5.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
-
+        # print(episode_losses)
 
 if __name__ == "__main__":
     main()

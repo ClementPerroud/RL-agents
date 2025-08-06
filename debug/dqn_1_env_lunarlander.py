@@ -1,7 +1,7 @@
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_agents.double_q_net import  DoubleQNNProxy
 from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
-from rl_agents.replay_memory.replay_memory import ReplayMemory
+from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.q_agents.dqn import DQNAgent
 
@@ -37,15 +37,17 @@ def main():
 
     nb_env = 1
     memory_size = 1E8
-    replay_memory = ReplayMemory(
-        length = memory_size, 
+    multi_step = 3
+    replay_memory = MultiStepReplayMemory(
+        length = memory_size,
+        multi_step= multi_step,
         sampler= PrioritizedReplaySampler(length= memory_size, alpha= 0.65, beta_0=0.5, duration=250_000),
         observation_space= observation_space)
 
     q_net=QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
     q_net = DoubleQNNProxy(
         q_net = q_net,
-        tau= 1000
+        tau= 500
     )
     action_strategy = EspilonGreedyActionStrategy(
         q = 1 - 1E-4,
@@ -55,12 +57,11 @@ def main():
     agent = DQNAgent(
         nb_env= nb_env,
         action_strategy= action_strategy,
-        n_steps= 3,
         train_every= 3,
-        gamma=0.99,
+        gamma=0.99 ** multi_step,
         replay_memory= replay_memory,
         q_net = q_net,
-        optimizer= torch.optim.Adam(q_net.parameters(), lr = 1E-3)
+        optimizer= torch.optim.Adam(q_net.parameters(), lr = 1E-4)
     )
 
     episodes = 1000
@@ -90,6 +91,7 @@ def main():
         episode_loss = np.array(episode_losses).mean()
         print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:5.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
 
+        # if episode_rewards.
 
 if __name__ == "__main__":
     main()

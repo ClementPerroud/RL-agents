@@ -1,12 +1,12 @@
 from rl_agents.agent import AbstractAgent
-from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
+from rl_agents.replay_memory.replay_memory import AbstractReplayMemory, MultiStepReplayMemory
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
 from rl_agents.q_agents.q_agent import AbstractQAgent
 
 import torch
 import numpy as np
-
+import logging
 
 class DQNAgent(
     torch.nn.Module,
@@ -18,7 +18,6 @@ class DQNAgent(
         nb_env: int,
         action_strategy: AbstractActionStrategy,
         gamma: float,
-        n_steps: int,
         train_every: int,
         replay_memory: AbstractReplayMemory,
         q_net: AbstractDeepQNeuralNetwork,
@@ -29,9 +28,11 @@ class DQNAgent(
 
         torch.nn.Module.__init__(self)
         AbstractAgent.__init__(self, nb_env=nb_env, action_strategy=action_strategy)
-        self.n_steps = n_steps
         self.gamma = gamma
         self.replay_memory = replay_memory.connect(self)
+        if isinstance(self.replay_memory, MultiStepReplayMemory):
+            self.gamma = self.gamma ** self.replay_memory.multi_step
+        
         self.batch_size = batch_size
         self.train_every = train_every
 
@@ -77,8 +78,7 @@ class DQNAgent(
             y_true += torch.where(
                 done,
                 0,
-                (self.gamma**self.n_steps)
-                * torch.amax(
+                self.gamma * torch.amax(
                     self.Q(next_state, target=True), dim=-1
                 ),  # is meant to predict the end of the mathematical sequence
             )
@@ -98,7 +98,6 @@ class DQNAgent(
         y_true, y_pred = self.compute_td_errors(
             state=state, action=action, reward=reward, next_state=next_state, done=done
         )
-
         loss = self.loss_fn(y_pred, y_true) * weight
         loss = loss.mean()
         loss.backward()
@@ -109,6 +108,7 @@ class DQNAgent(
             self.replay_memory.train_callback(
                 agent=self, infos={"y_true": y_true, "y_pred": y_pred}
             )
+        # print(y_pred, y_true, loss.item())
         return loss.item()
 
     def Q(self, state: torch.Tensor, target=False) -> torch.Tensor:

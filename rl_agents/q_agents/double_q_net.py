@@ -8,20 +8,19 @@ from typing import Callable
 class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
     def __init__(
         self,
-        q_net : 'AbstractDeepQNeuralNetwork',
+        q_net_generator : 'AbstractDeepQNeuralNetwork',
         tau: int,
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.tau = tau
-        self.q_net: AbstractDeepQNeuralNetwork = q_net
-        self.q_net_target: AbstractDeepQNeuralNetwork = deepcopy(self.q_net)
+        self.q_net: AbstractDeepQNeuralNetwork = q_net_generator()
+        self.q_net_target: AbstractDeepQNeuralNetwork = q_net_generator().requires_grad_(False)
 
         self.q_net = self.q_net.connect(self)
         self.q_net_target = self.q_net_target.connect(self)
         
-        self.q_net_target.requires_grad_(False)
 
     def forward(self, *args, target: bool = False, **kwargs):
         if target:
@@ -31,4 +30,7 @@ class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
     @torch.no_grad()
     def update(self, agent: AbstractAgent):
         if agent.step % self.tau == 0:
-            self.q_net_target.load_state_dict(self.q_net.state_dict())
+            self._copy_weights()
+
+    def _copy_weights(self):
+        self.q_net_target.load_state_dict(self.q_net.state_dict())

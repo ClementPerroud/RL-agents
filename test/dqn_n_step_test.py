@@ -29,7 +29,7 @@ class DummyQNetwork(AbstractDeepQNeuralNetwork):
 def test_dqn_agent_n_step_replay_memory():
     nb_env = 1
     gamma = 0.9
-    n_steps = 3
+    n_steps = 10
     obs_space = Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
     memory = MultiStepReplayMemory(
@@ -42,8 +42,7 @@ def test_dqn_agent_n_step_replay_memory():
     agent = DQNAgent(
         nb_env=nb_env,
         action_strategy=DummyActionStrategy(),
-        gamma=gamma,
-        n_steps=n_steps,
+        gamma=gamma ** n_steps,
         train_every=1,
         replay_memory=memory,
         q_net=DummyQNetwork(nb_actions=2),
