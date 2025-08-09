@@ -3,7 +3,7 @@ from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
 import numpy as np
 from abc import ABC, abstractmethod
 from gymnasium.spaces import Space
-
+import math
 
 class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
     def __init__(self, action_space: Space):
@@ -50,10 +50,11 @@ class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
 
 
 class EspilonGreedyActionStrategy(BaseEspilonGreedyActionStrategy):
-    def __init__(self, q: float, min_epsilon: float, action_space: Space):
+    def __init__(self, q: float, start_epsilon : float, end_epsilon: float, action_space: Space):
         super().__init__(action_space=action_space)
         self.q = q
-        self.min_epsilon = min_epsilon
+        self.start_epsilon = start_epsilon
+        self.end_epsilon = end_epsilon
 
     def epsilon_function(self, agent):
-        return max(self.min_epsilon, self.q**agent.step)
+        return max(self.end_epsilon, self.end_epsilon + (self.start_epsilon - self.end_epsilon) *self.q**agent.step)

@@ -1,63 +1,128 @@
 import numpy as np
+from collections.abc import Iterable
 
-epsilon = 1e-7
 
+epsilon = 1e-6  # Small constant to avoid zero‑probability issues
 
 class SumTree:
-    def __init__(self, size):
-        self.size = size
-        self.node_layers = [np.array([epsilon] * size)]
+    """Binary SumTree for Prioritized Experience Replay (PER).
+
+    Each leaf stores a *non‑negative* priority p_i. Internal nodes store the sum
+    of their two children. Thanks to this property, we can sample a leaf in
+    O(log N) via a cumulative‑sum lookup.
+
+    Parameters
+    ----------
+    size : int
+        Maximum number of elements that can be stored (capacity). When the tree
+        is full, `add()` overwrites in circular fashion (FIFO).
+    """
+
+    def __init__(self, size: int):
+        if size <= 0:
+            raise ValueError("size must be a strictly positive integer")
+
+        self.size = int(size)
+        self.length = 0          # Number of elements actually inserted
+
+        # ----- Build layered array of sums (bottom → top) -----
+        self.node_layers: list[np.ndarray] = [np.zeros(size, dtype=np.float32)]
         layer_size = size
         while layer_size > 1:
             layer_size = (layer_size + 1) // 2
-            self.node_layers.append(np.array([epsilon] * layer_size))
-        self.layer_len = len(self.node_layers)
-        self.layer_lens = [len(layer) for layer in self.node_layers]
-        self.i = 0
+            self.node_layers.append(np.zeros(layer_size, dtype=np.float32))
 
-    def __setitem__(self, loc, value):
-        if isinstance(loc, int):
-            idx = loc
-            change = value - self.node_layers[0][idx]
-            self.node_layers[0][idx] = value
+        self.n_layers = len(self.node_layers)
 
-            for idx_layer in range(1, self.layer_len):
-                idx = idx // 2  # Get parent index
-                self.node_layers[idx_layer][idx] += change
+    # ---------------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------------
+    def _propagate(self, leaf_idx: int, change: float) -> None:
+        """Propagate *change* from a leaf up to the root."""
+        for layer in range(1, self.n_layers):
+            leaf_idx //= 2
+            self.node_layers[layer][leaf_idx] += change
 
-        else:  # List, array ...
-            for i in range(len(loc)):
-                self.__setitem__(loc[i], value[i])
+    # ---------------------------------------------------------------------
+    # Public API
+    # ---------------------------------------------------------------------
+    def add(self, value: float | Iterable[float]):
+        """Insert a priority (or a batch of priorities) at the next position.
 
-    def __getitem__(self, loc):
-        return self.node_layers[0][loc]
+        If the capacity is reached, we overwrite in FIFO order.
+        """
+        if isinstance(value, Iterable):
+            for v in value:
+                self.add(v)
+            return
 
-    def add(self, value):
-        i = self.i % self.size
-        self[i] = value
-        self.i += 1
+        v = float(max(value, epsilon))  # Clamp to strictly positive
+        leaf_idx = self.length % self.size
+        self.length += 1
 
-    def sum(self):
-        return self.node_layers[self.layer_len - 1][0]
+        change = v - self.node_layers[0][leaf_idx]
+        self.node_layers[0][leaf_idx] = v
+        self._propagate(leaf_idx, change)
 
-    def sample(self, batch_size):
-        batch = []
+    def __setitem__(self, idx: int | np.ndarray, value):
+        """Update one or several priorities in‑place."""
+        if isinstance(idx, (list, np.ndarray)):
+            idx = np.asarray(idx, dtype=int)
+            value = np.asarray(value, dtype=np.float32)
+            if idx.shape != value.shape:
+                raise ValueError("index and value must have the same shape")
+            for i, v in zip(idx, value):
+                self.__setitem__(int(i), float(v))
+            return
 
-        random_cumsums = np.random.rand(batch_size) * (self.sum() - epsilon / 10)
+        if idx >= self.length:
+            raise IndexError(
+                f"Cannot set value at index {idx} (current length = {self.length})")
 
-        # Then, fill up the remaining batch with the standard procedure.
-        for i in range(batch_size):
-            cumsum = random_cumsums[i]
+        v = float(max(value, epsilon))
+        change = v - self.node_layers[0][idx]
+        self.node_layers[0][idx] = v
+        self._propagate(idx, change)
 
-            idx = 0
-            for i_layer in range(self.layer_len - 1, 0, -1):
-                left_child_index, right_child_index = idx * 2, idx * 2 + 1
-                self.node_layers[i_layer - 1][left_child_index]
-                if cumsum < self.node_layers[i_layer - 1][left_child_index]:
-                    idx = left_child_index
+    def __getitem__(self, idx: int | np.ndarray):
+        return self.node_layers[0][idx]
+
+    # ------------------------------------------------------------------
+    # Sampling
+    # ------------------------------------------------------------------
+    def sum(self) -> float:
+        """Return the total priority (value stored in the root)."""
+        return float(self.node_layers[-1][0])
+
+    def sample(self, batch_size: int) -> list[int]:
+        """Sample *batch_size* leaf indices proportionally to their priorities.
+        Raises ValueError if the tree is empty.
+        """
+        if self.length == 0:
+            raise ValueError("Cannot sample from an empty SumTree")
+
+        total = self.sum()
+        if not np.isfinite(total) or total <= 0.0:
+            raise ValueError(f"Invalid total priority: {total}")
+
+        cumsums = np.random.rand(batch_size) * (total - epsilon)
+        indices: list[int] = []
+
+        for cs in cumsums:
+            idx = 0  # Start from the root.
+            for layer in range(self.n_layers - 1, 0, -1):
+                left_idx = idx * 2
+                left_sum = self.node_layers[layer - 1][left_idx]
+                if cs < left_sum:
+                    idx = left_idx
                 else:
-                    idx = right_child_index
-                    cumsum -= self.node_layers[i_layer - 1][left_child_index]
+                    idx = left_idx + 1
+                    cs -= left_sum
+            # `idx` is now a leaf index.
+            if idx >= self.length:
+                # This can happen only if some of the last leaves were never
+                # filled (length < capacity). Draw again.
+                idx = np.random.randint(0, self.length)
+            indices.append(idx)
 
-            batch.append(idx)
-        return batch
+        return indices

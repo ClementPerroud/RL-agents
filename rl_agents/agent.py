@@ -11,12 +11,14 @@ class AbstractAgent(AbstractActionStrategy, AgentService, ABC):
         self,
         nb_env: int,
         action_strategy: AbstractActionStrategy,
+        device : torch.DeviceObjType = None,
     ):
         self.nb_env = nb_env
         self.action_strategy = action_strategy.connect(self)
 
         self.episode = 0
         self.step = 0
+        self.device = device
 
     @property
     def services(self) -> set["AgentService"]:

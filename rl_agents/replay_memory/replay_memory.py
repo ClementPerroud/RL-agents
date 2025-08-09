@@ -41,8 +41,8 @@ class BaseReplayMemory(
         self.length = int(length)
         self.tensor_memories = {}
         self.names = names
-        self.sizes = [(self.length,) + size for size in sizes]
-        self.dtypes = dtypes
+        self.sizes = {name:(self.length,) + size for name, size in zip(self.names, sizes)}
+        self.dtypes = {name:dtype for name, dtype in zip(self.names, dtypes)}
         self.device = device
         self.sampler = sampler.connect(self)
         self.n = len(names)
@@ -51,9 +51,9 @@ class BaseReplayMemory(
             dtypes
         ), f"names ({len(names)}), sizes ({len(sizes)}), dtypes ({len(dtypes)}) must have the same length"
 
-        for i in range(self.n):
-            self.tensor_memories[names[i]] = torch.zeros(
-                size=self.sizes[i], dtype=dtypes[i], device=device
+        for name in names:
+            self.tensor_memories[name] = torch.zeros(
+                size=self.sizes[name], dtype=self.dtypes[name], device=device
             )
 
         self.i: int = 0
@@ -70,19 +70,23 @@ class BaseReplayMemory(
 
         i = int(self.i % self.length)
 
+        nb_env = next(iter(kwargs.values())).size(0)
         for name, val in kwargs.items():
             try:
-                # print(name, i, val, type(val), self.tensor_memories[name][i], self.tensor_memories[name].shape)
-                try:
-                    index_name = self.names.index(name)
-                except ValueError as e:
-                    raise ValueError(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
+                val_tensor = torch.as_tensor(val, dtype = self.dtypes[name])
                 
-                self.tensor_memories[name][i] = torch.as_tensor(val, dtype = self.dtypes[index_name])
+
+                if i+nb_env <= self.length: self.tensor_memories[name][i:i+nb_env] = val_tensor
+                else:
+                    n_end = self.length - i
+                    n_start = nb_env - n_end
+                    self.tensor_memories[name][i:i+n_end] = val_tensor[:n_end]
+                    self.tensor_memories[name][0:n_start] = val_tensor[n_end:n_end + n_start]
+
             except KeyError:
                 raise KeyError(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
         
-        self.i += 1
+        self.i += nb_env
         self.sampler.store(agent=agent, **kwargs)
 
     @torch.no_grad()
@@ -140,23 +144,23 @@ class ReplayMemory(BaseReplayMemory):
 class MultiStepReplayMemory(BaseReplayMemory):
     """
     n-step replay pour plusieurs environnements parallèles.
-    Les arguments d'entrée de .store doivent avoir shape (num_envs, …).
+    Les arguments d'entrée de .store doivent avoir shape (nb_env, …).
     """
 
     def __init__(
         self,
         length: int,
         observation_space: Box,
-        num_envs: int,
-        multi_step: int = 3,
-        gamma: float = 0.99,
-        sampler: AbstractSampler = RandomSampler(),
+        nb_env: int,
+        gamma: float,
+        multi_step: int,
+        sampler: AbstractSampler,
         device=None,
     ):
 
         assert isinstance(observation_space, Box)
-        self.multi_step, self.gamma, self.num_envs = multi_step, gamma, num_envs
-        self.buffers = [deque(maxlen=multi_step) for _ in range(num_envs)]
+        self.multi_step, self.gamma, self.nb_env = multi_step, gamma, nb_env
+        self.buffers = [deque(maxlen=multi_step) for _ in range(nb_env)]
 
         super().__init__(
             length=length,
@@ -188,30 +192,36 @@ class MultiStepReplayMemory(BaseReplayMemory):
         R = torch.dot(self._gammas[: len(r)], r)  # scalaire  γ^k * r_k
 
         return dict(
-            state=buf[0]["state"],
-            action=buf[0]["action"],
-            next_state=buf[-1]["next_state"],
-            reward=R,
-            done=buf[-1]["done"],
+            state=buf[0]["state"][None, ...],
+            action=buf[0]["action"][None, ...],
+            next_state=buf[-1]["next_state"][None, ...],
+            reward=R[None, ...],
+            done=buf[-1]["done"][None, ...],
         )
 
     # ---- API publique ----------------------------------------------
     @torch.no_grad()
     def store(self,  agent: "AbstractAgent", *, state, action, next_state, reward, done):
         """
-        `state`, `action`, … : tenseurs dont la 0-ème dim = num_envs.
+        `state`, `action`, … : tenseurs dont la 0-ème dim = nb_env.
         """
-        # Boucle fine sur les envs ; la plupart du temps num_envs <= 16, négligeable.
-        for env_id in range(self.num_envs):
+        state =torch.as_tensor(state, dtype=self.dtypes["state"])
+        action = torch.as_tensor(action, dtype=self.dtypes["action"])
+        next_state = torch.as_tensor(next_state, dtype=self.dtypes["next_state"])
+        reward = torch.as_tensor(reward, dtype=self.dtypes["reward"])
+        done = torch.as_tensor(done, dtype=self.dtypes["done"])
+        
+        # Boucle fine sur les envs ; la plupart du temps nb_env <= 16, négligeable.
+        for env_id in range(self.nb_env):
             buf = self.buffers[env_id]
             buf.append(
                 {
-                    "state": torch.as_tensor(state[env_id]),
-                    "action": torch.as_tensor(action[env_id]),
-                    "next_state": torch.as_tensor(next_state[env_id]),
-                    "reward": torch.as_tensor(reward[env_id]),
-                    "done": torch.as_tensor(bool(done[env_id])),
-                }
+                    "state":state[env_id],
+                    "action":action[env_id],
+                    "next_state":next_state[env_id],
+                    "reward":reward[env_id],
+                    "done":done[env_id],
+                } # We use tensor[env_id:env_id+1] to select the one elem corresponding 
             )
 
             # fenêtre pleine : pousse une transition n-step

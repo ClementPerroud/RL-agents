@@ -1,7 +1,16 @@
+if __name__ == "__main__":
+    import os
+    import sys
+    import inspect
+
+    currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+    parentdir = os.path.dirname(currentdir)
+    sys.path.insert(0, parentdir) 
+
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
-from rl_agents.q_agents.double_q_net import  DoubleQNNProxy
+from rl_agents.q_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
-from rl_agents.replay_memory.replay_memory import ReplayMemory
+from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.q_agents.dqn import DQNAgent
 
@@ -15,11 +24,10 @@ class QNN(AbstractDeepQNeuralNetwork):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D
         self.module_list = torch.nn.ModuleList()
-        for i in range(4):
+        for i in range(2):
             self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features= observation_space.shape[0] if i ==0 else hidden_dim, out_features= hidden_dim))
             self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
         self.head = torch.nn.Linear(in_features=hidden_dim, out_features=action_space.n)
-
     
     def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
         # state : [batch, nb_obs]
@@ -38,18 +46,19 @@ def main():
     nb_env = 1
     memory_size = 1E7
     replay_memory = ReplayMemory(
-        length = memory_size, 
+        length = memory_size,
         sampler= RandomSampler(),
         observation_space= observation_space)
 
-    q_net_generator = lambda : QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 64)
-    q_net = DoubleQNNProxy(
+    q_net_generator = lambda : QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
+    q_net = SoftDoubleQNNProxy(
         q_net_generator = q_net_generator,
-        tau= 1000
+        tau= 200
     )
     action_strategy = EspilonGreedyActionStrategy(
-        q = 1 - 5E-4,
-        min_epsilon= 0.01,
+        q = 1 - 4E-4,
+        start_epsilon= 0.9,
+        end_epsilon= 0.01,
         action_space= action_space
     )
     agent = DQNAgent(
@@ -59,8 +68,9 @@ def main():
         gamma=0.99,
         replay_memory= replay_memory,
         q_net = q_net,
-        optimizer= torch.optim.Adam(q_net.parameters(), lr = 1E-4),
-        loss_fn= torch.nn.SmoothL1Loss()
+        optimizer= torch.optim.AdamW(q_net.parameters(), lr = 3E-4, amsgrad=True),
+        loss_fn= torch.nn.SmoothL1Loss(),
+        batch_size= 128,
     )
 
     episodes = 1000
@@ -78,18 +88,22 @@ def main():
             next_state, reward, done, truncated, infos = env.step(action = int(action))
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
+            done = done or truncated
 
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done)
             loss = agent.train_agent()
 
             if loss is not None: episode_losses.append(loss)
+            
             episode_steps += 1
             state = next_state
 
         epsilon = action_strategy.epsilon
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:5.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
         # print(episode_losses)
 
 if __name__ == "__main__":
+    import sys
+    sys.path.append("../")
     main()

@@ -13,3 +13,6 @@ class AbstractQAgent(AbstractAgent, ABC):
 
     @abstractmethod
     def compute_td_errors(self): ...
+
+    @abstractmethod
+    def compute_target_predictions(self): ...

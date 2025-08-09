@@ -29,7 +29,7 @@ class RandomSampler(AbstractSampler):
 
     def sample(self, batch_size: int, size: int):
         batch = torch.from_numpy(np.random.choice(size, size=batch_size, replace=False))
-        return batch, 1
+        return batch, None
 
 
 class PrioritizedReplaySampler(AbstractSampler):
@@ -52,15 +52,15 @@ class PrioritizedReplaySampler(AbstractSampler):
         beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / self.duration)
 
         batch = self.priorities.sample(batch_size)
-        weights = (size * self.priorities[batch] / self.priorities.sum()) ** (-beta)
-        weights = weights / np.amax(weights)
+        weights = (size * self.priorities[batch] / (self.priorities.sum() + 1E-8)) ** (-beta)
+        weights = weights / (np.amax(weights) + 1E-12)
 
         self.last_batch = batch
         self.step += 1
         return torch.tensor(batch).long(), torch.from_numpy(weights)
 
     def train_callback(self, agent: "AbstractAgent", infos: dict):
-        td_errors = (infos["y_true"] - infos["y_pred"]).abs().numpy()
+        td_errors = infos["td_errors"].abs().cpu().numpy()
         self.priorities[self.last_batch] = (td_errors + 1e-6) ** self.alpha
 
     @torch.no_grad()
@@ -68,14 +68,15 @@ class PrioritizedReplaySampler(AbstractSampler):
         assert isinstance(
             agent, AbstractQAgent
         ), "PrioritizedReplaySampler can only be used with QAgents"
+        state = torch.as_tensor(kwargs["state"])
+        action = torch.as_tensor(kwargs["action"])
+        reward = torch.as_tensor(kwargs["reward"])
+        next_state = torch.as_tensor(kwargs["next_state"])
+        done = torch.as_tensor(kwargs["done"])
 
-        state = torch.Tensor([kwargs["state"]])
-        action = torch.Tensor([kwargs["action"]])
-        reward = torch.Tensor([kwargs["reward"]])
-        next_state = torch.Tensor([kwargs["next_state"]])
-        done = torch.BoolTensor([kwargs["done"]])
-
-        y_true, y_pred = agent.compute_td_errors(
+        y_true, y_pred = agent.compute_target_predictions(
             state=state, action=action, reward=reward, next_state=next_state, done=done
         )
-        self.priorities.add(float((y_true - y_pred)[0].abs().numpy()))
+        td_errors = agent.compute_td_errors(y_true=y_true, y_pred=y_pred).abs().cpu().numpy()
+        new_priorities = (td_errors + 1e-6) ** self.alpha 
+        self.priorities.add(new_priorities)
