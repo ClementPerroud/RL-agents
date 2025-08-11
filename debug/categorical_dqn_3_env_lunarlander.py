@@ -20,6 +20,7 @@ from rl_agents.q_agents.categorical_dqn import CategoricalDQNAgent, CategoricalL
 import torch
 import numpy as np
 import gymnasium as gym
+from collections import deque
 
 
 class CategoricalQNN(AbstractDeepQNeuralNetwork):
@@ -43,16 +44,19 @@ class CategoricalQNN(AbstractDeepQNeuralNetwork):
 
 def main():
     # gym.make("LunarLander-v3")
-    env = gym.make("LunarLander-v3")
 
-    action_space = env.action_space # 0 : short , 1 : long
-    observation_space = env.observation_space # open, high, low, close, volume
-
-    nb_env = 1
+    nb_env = 3
     memory_size = 300_000
     nb_atoms = 51
     gamma = 0.99
     v_min, v_max = -250, 300
+
+    single_env = gym.make("LunarLander-v3")
+    env = gym.make_vec("LunarLander-v3", num_envs= nb_env, vectorization_mode="sync")
+
+    action_space = single_env.action_space # 0 : short , 1 : long
+    observation_space = single_env.observation_space # open, high, low, close, volume
+
     replay_memory = MultiStepReplayMemory(
         length = memory_size,
         nb_env= nb_env,
@@ -68,14 +72,14 @@ def main():
         q_net = q_net,
         tau= 20
     )
-    q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
-    action_strategy = NoActionStrategy()
-    # action_strategy = EspilonGreedyActionStrategy(
-    #     q = 1 - 1E-4,
-    #     start_epsilon= 0.9,
-    #     end_epsilon= 0.01,
-    #     action_space= action_space
-    # )
+    # q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
+    # action_strategy = NoActionStrategy()
+    action_strategy = EspilonGreedyActionStrategy(
+        q = 1 - 1E-4,
+        start_epsilon= 0.9,
+        end_epsilon= 0.01,
+        action_space= action_space
+    )
     agent = CategoricalDQNAgent(
         nb_env= nb_env,
         nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,
@@ -90,37 +94,38 @@ def main():
         device = "cpu"
     )
 
-    episodes = 1000
-    for i in range(episodes):
-        episode_rewards = 0
-        episode_losses = []
-        episode_steps = 0
+    episode_rewards = np.zeros(shape=(nb_env,))
+    episode_losses = deque(maxlen= 200)
+    episode_steps = np.zeros(shape=(nb_env,), dtype=int)
+    episodes = 0
 
-        truncated = False
-        done = False
-        state, infos = env.reset()
+    state, infos = env.reset()
+    
+    while episodes < 20000:
+        action = agent.pick_action(state= state)
+        next_state, reward, done, truncated, infos = env.step(actions = action.astype(int))
+        # print(state, action, reward, next_state, done, truncated)
+        done = done | truncated
+
+        agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done)
+        loss = agent.train_agent()
+
+        if loss is not None: episode_losses.append(loss)
         
-        while not truncated and not done:
-            action = agent.pick_action(state= state)
-            next_state, reward, done, truncated, infos = env.step(action = int(action))
-            episode_rewards += reward
-            # print(state, action, reward, next_state, done, truncated)
-            done = done or truncated
+        state = next_state
+        episode_rewards += reward
+        episode_steps += 1
 
-            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done)
-            loss = agent.train_agent()
+        reseted_env = []
+        for i in range(nb_env):
+            if done[i]:
+                episodes += 1
+                episode_loss = np.array(episode_losses).mean()
+                print(f"Episode {episodes:3d} - Steps : {episode_steps[i]:4d} | Total Rewards : {episode_rewards[i]:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {action_strategy.epsilon : 0.2f} | Agent Step : {agent.step}")
+                episode_steps[i] = 0
+                episode_rewards[i] = 0
+    # print(episode_losses)
 
-            if loss is not None: episode_losses.append(loss)
-            
-            episode_steps += 1
-            state = next_state
-
-        episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
-        # print(episode_losses)
-
-        if i >= 150:
-            agent.plot_atoms_distributions()
 
 if __name__ == "__main__":
     import sys

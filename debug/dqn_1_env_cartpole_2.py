@@ -9,6 +9,7 @@ if __name__ == "__main__":
 
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.action_strategy.action_strategy import NoActionStrategy
 from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
@@ -55,9 +56,9 @@ def main():
         sampler= PrioritizedReplaySampler(length=memory_size, duration= 100_000),
         observation_space= observation_space)
 
-    q_net_generator = lambda : QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
+    q_net  = lambda : QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
-        q_net_generator = q_net_generator,
+        q_net = q_net,
         tau= 200
     )
     action_strategy = EspilonGreedyActionStrategy(

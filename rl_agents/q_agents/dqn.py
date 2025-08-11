@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import AbstractAgent, Mode
 from rl_agents.replay_memory.replay_memory import AbstractReplayMemory, MultiStepReplayMemory
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
@@ -144,3 +144,8 @@ class DQNAgent(
         q_values = self.Q(state, target=target)
         # print("Test2 : ", actions.shape, q_values.shape)
         return q_values.gather(dim=1, index=actions.long().unsqueeze(1)).squeeze(1)
+    
+    @property
+    def mode(self):
+        if self.training: return Mode.TRAINING
+        return Mode.EVAL

@@ -4,7 +4,11 @@ from rl_agents.service import AgentService
 from abc import ABC, abstractmethod
 import torch
 import numpy as np
+from enum import Enum
 
+class Mode(Enum):
+    TRAINING = 0
+    EVAL = 1
 
 class AbstractAgent(AbstractActionStrategy, AgentService, ABC):
     def __init__(
@@ -50,3 +54,13 @@ class AbstractAgent(AbstractActionStrategy, AgentService, ABC):
 
         self.update()
         return action
+
+    @abstractmethod
+    def train(self): ...
+
+    @abstractmethod
+    def eval(self): ...
+
+    @property
+    @abstractmethod
+    def mode(self) -> Mode: ...

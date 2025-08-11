@@ -8,15 +8,15 @@ from typing import Callable
 class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
     def __init__(
         self,
-        q_net_generator : 'AbstractDeepQNeuralNetwork',
+        q_net : 'AbstractDeepQNeuralNetwork',
         tau: int,
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.tau = tau
-        self.q_net: AbstractDeepQNeuralNetwork = q_net_generator()
-        self.q_net_target: AbstractDeepQNeuralNetwork = q_net_generator().requires_grad_(False)
+        self.q_net: AbstractDeepQNeuralNetwork = q_net
+        self.q_net_target: AbstractDeepQNeuralNetwork = deepcopy(q_net).requires_grad_(False)
 
         self.q_net = self.q_net.connect(self)
         self.q_net_target = self.q_net_target.connect(self)

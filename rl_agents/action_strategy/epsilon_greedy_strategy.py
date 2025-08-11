@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import AbstractAgent, Mode
 from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
 import numpy as np
 from abc import ABC, abstractmethod
@@ -14,7 +14,8 @@ class BaseEspilonGreedyActionStrategy(AbstractActionStrategy, ABC):
     def epsilon_function(self, agent: AbstractAgent): ...
 
     def pick_action(self, agent: AbstractAgent, state: np.ndarray):
-        if not agent.training:
+        if agent.mode.value != Mode.TRAINING.value:
+            print("Test")
             return agent._pick_deterministic_action(state)
 
         if agent.nb_env == 1:

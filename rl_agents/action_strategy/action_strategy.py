@@ -10,4 +10,8 @@ if TYPE_CHECKING:
     
 class AbstractActionStrategy(AgentService, ABC):
     @abstractmethod
-    def pick_action(self, state: np.ndarray) -> np.ndarray: ...
+    def pick_action(self, agent : 'AbstractAgent', state: np.ndarray) -> np.ndarray: ...
+
+class NoActionStrategy(AgentService, ABC):
+    def pick_action(self, agent: 'AbstractAgent', state: np.ndarray):
+        return agent._pick_deterministic_action(state)
