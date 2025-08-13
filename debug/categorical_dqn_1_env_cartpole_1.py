@@ -9,11 +9,12 @@ if __name__ == "__main__":
 
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
-from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
+from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.q_agents.dqn import DQNAgent
-from rl_agents.q_agents.categorical_dqn import CategoricalDQNAgent, CategoricalLoss
+from rl_agents.q_functions.distributional_dqn_function import DistributionalDQNFunction, CategoricalLoss
+from rl_agents.policies.value_policy import ValuePolicy
 
 import torch
 import numpy as np
@@ -50,35 +51,39 @@ def main():
     memory_size = 100_000
     nb_atoms = 51
     v_min, v_max = -50, 200
+    gamma = 0.99
     replay_memory = ReplayMemory(
         length = memory_size,
-        # sampler= RandomSampler(),
-        sampler= PrioritizedReplaySampler(length=memory_size, duration= 20_000),
+        sampler= RandomSampler(),
+        # sampler= PrioritizedReplaySampler(length=memory_size, duration= 20_000),
         observation_space= observation_space)
 
-    q_net_generator = lambda : CategoricalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
+    q_net = CategoricalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
-        q_net_generator = q_net_generator,
-        tau= 20
+        q_net = q_net,
+        tau= 50
     )
-    action_strategy = EspilonGreedyActionStrategy(
+    q_function = DistributionalDQNFunction(
+        nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        q_net=q_net,
+        loss_fn= CategoricalLoss(),
+        gamma = gamma
+        )
+    policy = EspilonGreedyPolicy(
         q = 1 - 4E-4,
         start_epsilon= 0.9,
         end_epsilon= 0.01,
-        action_space= action_space
+        action_space= action_space,
+        policy= ValuePolicy(q_function=q_function)
     )
-    agent = CategoricalDQNAgent(
+    agent = DQNAgent(
         nb_env= nb_env,
-        nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,
-        action_strategy= action_strategy,
+        policy= policy,
+        q_function= q_function,
         train_every= 1,
-        gamma=0.99,
         replay_memory= replay_memory,
-        q_net = q_net,
-        loss_fn=CategoricalLoss(),
-        optimizer= torch.optim.AdamW(q_net.parameters(), lr = 1E-3, amsgrad=True),
-        batch_size= 128,
-        device = "cpu"
+        batch_size= 128
     )
 
     episodes = 1000
@@ -106,7 +111,7 @@ def main():
             episode_steps += 1
             state = next_state
 
-        epsilon = action_strategy.epsilon
+        epsilon = policy.epsilon
         episode_loss = np.array(episode_losses).mean()
         print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
         # print(episode_losses)

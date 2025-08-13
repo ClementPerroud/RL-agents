@@ -1,9 +1,6 @@
-from rl_agents.q_agents.dqn import DQNAgent
-from rl_agents.agent import AbstractAgent
-from rl_agents.replay_memory.replay_memory import AbstractReplayMemory, MultiStepReplayMemory
+from rl_agents.q_functions.dqn_function import DQNFunction
+from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
-from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
-from rl_agents.q_agents.q_agent import AbstractQAgent
 import torch
 import matplotlib.pyplot as plt
 
@@ -14,20 +11,24 @@ class CategoricalLoss(torch.nn.modules.loss._Loss):
     def forward(self, input : torch.Tensor, target : torch.Tensor):
         return - (target * (input + 1E-8).log()).sum(-1)
 
-class CategoricalDQNAgent(DQNAgent):
+class DistributionalDQNFunction(DQNFunction):
+    
     def __init__(self,
             nb_atoms : int,
             v_min : float,
             v_max : float,
-            **dqn_kwargs,
+            q_net : AbstractDeepQNeuralNetwork,
+            optimizer : torch.optim.Optimizer,
+            loss_fn: torch.nn.modules.loss._Loss,
+            gamma : float,
         ):
-        super().__init__(**dqn_kwargs)
+        super().__init__(q_net=q_net, optimizer= optimizer, loss_fn=loss_fn, gamma=gamma)
         self.nb_atoms = nb_atoms
         self.v_min = v_min
         self.v_max = v_max
 
         self._delta_atoms = (v_max - v_min) / (nb_atoms - 1)
-        self._atoms : torch.Tensor = torch.linspace(start = self.v_min, end = self.v_max, steps = self.nb_atoms, dtype = torch.float32, device= self.device)
+        self._atoms : torch.Tensor = torch.linspace(start = self.v_min, end = self.v_max, steps = self.nb_atoms, dtype = torch.float32)
 
     def compute_td_errors(
         self,
@@ -46,12 +47,12 @@ class CategoricalDQNAgent(DQNAgent):
         next_state: torch.Tensor,  # [batch, state_shapes ...] obtained at t+multi_steps
         done: torch.Tensor,  # [batch] obtained at t+multi_steps
     ):  
-        # TODO : check if we should use target model or not
+        
         batch_size = state.size(0)
-        y_pred = self.Q_a(state = state, actions = action, target= False, return_atoms= True)
+        y_pred = self.Q_a(state = state, actions = action, training= True, return_atoms= True)
 
         with torch.no_grad():
-            p_next = self.Q(state=next_state, target= True, return_atoms= True) #[batch, nb_actions, nb_atoms]
+            p_next = self.Q(state=next_state, training= False, return_atoms= True) #[batch, nb_actions, nb_atoms]
             q_next = (p_next * self._atoms).sum(dim = -1) # [batch, nb_actions]
             a_star = torch.argmax(q_next, dim = 1, keepdim= True) #[batch]
             p_next = p_next.gather(1, a_star.unsqueeze(-1).expand(-1, 1, self.nb_atoms)).squeeze(1) # [batch, nb_atoms]
@@ -66,7 +67,7 @@ class CategoricalDQNAgent(DQNAgent):
             u = torch.ceil(b).long().clamp_max(self.nb_atoms - 1) #[batch, nb_atoms]
     
             
-            m = torch.zeros(size = (batch_size, self.nb_atoms), device=self.device) # [batch, nb_atoms]
+            m = torch.zeros(size = (batch_size, self.nb_atoms)) # [batch, nb_atoms]
             m.scatter_add_(1, l, p_next * (u.float() - b))
             m.scatter_add_(1, u, p_next * (b - l.float()))
             y_true = m
@@ -74,44 +75,44 @@ class CategoricalDQNAgent(DQNAgent):
             print("Catch")
         return y_true, y_pred #both : [batch, nb_atoms]
 
-    def Q(self, state: torch.Tensor, target=False, return_atoms = False) -> torch.Tensor:
-        q_logits = self.q_net.forward(state, target=target)
+    def Q(self, state: torch.Tensor, training=False, return_atoms = False) -> torch.Tensor:
+        q_logits = self.q_net.forward(state, training=training)
         q_prob = torch.softmax(q_logits, dim=-1) #[batch/nb_env, nb_actions, nb_atoms]
         return q_prob if return_atoms else q_prob @ self._atoms
     
     def Q_a(
-        self, state: torch.Tensor, actions: torch.Tensor, target=False, return_atoms = False
+        self, state: torch.Tensor, actions: torch.Tensor, training=False, return_atoms = False
     ) -> torch.Tensor:
         # actions : [batch]
-        q_values = self.Q(state, target=target, return_atoms=return_atoms) #[batch/nb_env, nb_actions, nb_atoms] if return_atoms is True else [batch/nb_env, nb_actions]
+        q_values = self.Q(state, training=training, return_atoms=return_atoms) #[batch/nb_env, nb_actions, nb_atoms] if return_atoms is True else [batch/nb_env, nb_actions]
         batch_idx = torch.arange(q_values.size(0), device=q_values.device)
         return q_values[batch_idx, actions.long()]  # shape [B] ou [B, N]
     
-    def plot_atoms_distributions(self, n_samples: int = 10_000, max_batch: int = 512):
+    def plot_atoms_distributions(self, replay_memory, n_samples: int = 10_000, max_batch: int = 512):
         """
         Estime la distribution C51 moyenne P(z|a) sur `n_samples` transitions,
         sans jamais dépasser `max_batch` exemples simultanément sur le GPU.
         """
-        if self.replay_memory.size() == 0:
+        if replay_memory.size() == 0:
             print("ReplayMemory is empty.")
             return
 
         self.eval()
-        nb_actions, nb_atoms = self.action_strategy.action_space.n, self.nb_atoms
+        nb_actions, nb_atoms = self.policy.action_space.n, self.nb_atoms
         sum_p = torch.zeros(nb_actions, nb_atoms, device=self.device)
         seen = 0
 
         with torch.no_grad():
             while seen < n_samples:
                 batch_sz = min(max_batch, n_samples - seen)
-                batch    = self.replay_memory.sample(batch_sz)
+                batch = replay_memory.sample(batch_sz)
                 if batch is None:          # pas assez de données stockées
                     break
 
-                states = batch["state"].to(self.device)
-                p      = self.Q(states, return_atoms=True)   # (B, A, N)
+                states = batch["state"]
+                p = self.Q(states, return_atoms=True)   # (B, A, N)
                 sum_p += p.sum(dim=0)                        # accumulate sur B
-                seen  += p.size(0)
+                seen += p.size(0)
 
             if seen == 0:
                 print("Pas assez de transitions pour échantillonner.")
@@ -133,10 +134,3 @@ class CategoricalDQNAgent(DQNAgent):
         plt.tight_layout()
         plt.show()
         self.train()
-if __name__ == "__main__":
-    agent = CategoricalDQNAgent(
-        nb_atoms= 51,
-        v_min= 0,
-        v_max= 51,
-        nb_env= 1, action_strategy= None, gamma= 0.99, train_every= 10, replay_memory= None, q_net= None, loss_fn= None, optimizer= None, batch_size= 54
-    )

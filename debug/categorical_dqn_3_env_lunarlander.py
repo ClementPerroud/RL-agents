@@ -9,13 +9,13 @@ if __name__ == "__main__":
 
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
-from rl_agents.action_strategy.action_strategy import NoActionStrategy
-from rl_agents.action_strategy.epsilon_greedy_strategy import EspilonGreedyActionStrategy
+from rl_agents.policies.value_policy import ValuePolicy
+from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.q_agents.dqn import DQNAgent
 from rl_agents.q_agents.noisy_net_strategy import NoisyNetProxy
-from rl_agents.q_agents.categorical_dqn import CategoricalDQNAgent, CategoricalLoss
+from rl_agents.q_functions.distributional_dqn_function import DistributionalDQNFunction, CategoricalLoss
 
 import torch
 import numpy as np
@@ -40,16 +40,17 @@ class CategoricalQNN(AbstractDeepQNeuralNetwork):
         x = state
         for module in self.module_list:
             x = module(x)
+        
+        # output : [batch, nb_actions, nb_atoms]
         return torch.reshape(self.head(x), shape = (-1, self.nb_actions, self.nb_atoms))
 
 def main():
-    # gym.make("LunarLander-v3")
-
     nb_env = 3
     memory_size = 300_000
     nb_atoms = 51
     gamma = 0.99
     v_min, v_max = -250, 300
+    multi_step = 3
 
     single_env = gym.make("LunarLander-v3")
     env = gym.make_vec("LunarLander-v3", num_envs= nb_env, vectorization_mode="sync")
@@ -61,7 +62,7 @@ def main():
         length = memory_size,
         nb_env= nb_env,
         gamma = gamma,
-        multi_step= 3,
+        multi_step= multi_step,
         # sampler= RandomSampler(),
         sampler= PrioritizedReplaySampler(length=memory_size, duration= 150_000),
         observation_space= observation_space)
@@ -72,26 +73,30 @@ def main():
         q_net = q_net,
         tau= 20
     )
+    q_function = DistributionalDQNFunction(
+        nb_atoms=nb_atoms,
+        v_min=v_min, v_max=v_max,
+        q_net=q_net,
+        optimizer=torch.optim.AdamW(q_net.parameters(), lr= 1E-3, amsgrad= True),
+        loss_fn = CategoricalLoss(),
+        gamma= gamma ** multi_step
+    )
     # q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
-    # action_strategy = NoActionStrategy()
-    action_strategy = EspilonGreedyActionStrategy(
-        q = 1 - 1E-4,
+
+    policy = EspilonGreedyPolicy(
+        q = (1 - 1E-4)**(3),
         start_epsilon= 0.9,
         end_epsilon= 0.01,
-        action_space= action_space
+        action_space= action_space,
+        policy= ValuePolicy(q_function=q_function)
     )
-    agent = CategoricalDQNAgent(
+    agent = DQNAgent(
         nb_env= nb_env,
-        nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,
-        action_strategy= action_strategy,
-        train_every= 3,
-        gamma=gamma,
+        policy= policy,
+        train_every= 1,
         replay_memory= replay_memory,
-        q_net = q_net,
-        loss_fn=CategoricalLoss(),
-        optimizer= torch.optim.AdamW(q_net.parameters(), lr = 1E-3, amsgrad=True),
         batch_size= 128,
-        device = "cpu"
+        q_function=q_function
     )
 
     episode_rewards = np.zeros(shape=(nb_env,))
@@ -121,7 +126,7 @@ def main():
             if done[i]:
                 episodes += 1
                 episode_loss = np.array(episode_losses).mean()
-                print(f"Episode {episodes:3d} - Steps : {episode_steps[i]:4d} | Total Rewards : {episode_rewards[i]:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {action_strategy.epsilon : 0.2f} | Agent Step : {agent.step}")
+                print(f"Episode {episodes:3d} - Steps : {episode_steps[i]:4d} | Total Rewards : {episode_rewards[i]:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {policy.epsilon : 0.2f} | Agent Step : {agent.step}")
                 episode_steps[i] = 0
                 episode_rewards[i] = 0
     # print(episode_losses)

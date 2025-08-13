@@ -2,13 +2,13 @@ import numpy as np
 import torch
 from gymnasium.spaces import Box
 
-from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
+from rl_agents.policy.policy import AbstractPolicy
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_agents.dqn import DQNAgent
 from rl_agents.replay_memory.replay_memory import MultiStepReplayMemory
 
 
-class DummyActionStrategy(AbstractActionStrategy):
+class DummyPolicy(AbstractPolicy):
     def pick_action(self, agent, state):
         return np.zeros(agent.nb_env, dtype=np.int64)
 
@@ -41,7 +41,7 @@ def test_dqn_agent_n_step_replay_memory():
     )
     agent = DQNAgent(
         nb_env=nb_env,
-        action_strategy=DummyActionStrategy(),
+        policy=DummyPolicy(),
         gamma=gamma ** n_steps,
         train_every=1,
         replay_memory=memory,

@@ -1,4 +1,4 @@
-from rl_agents.q_agents.q_agent import AbstractQAgent
+from rl_agents.q_agents.value_agent import AbstractValueAgent
 from rl_agents.service import AgentService
 from rl_agents.utils.sumtree import SumTree
 
@@ -18,7 +18,7 @@ class AbstractSampler(AgentService, ABC):
 
     def update(self, agent: "AbstractAgent"): ...
 
-    def train_callback(self, agent: "AbstractAgent", infos: dict): ...
+    def train_callback(self, **kwargs): ...
 
     def store(self, agent: "AbstractAgent", **kwargs): ...
 
@@ -27,7 +27,7 @@ class RandomSampler(AbstractSampler):
     def __init__(self):
         pass
 
-    def sample(self, batch_size: int, size: int):
+    def sample(self, batch_size: int, size: int, training : bool):
         batch = torch.from_numpy(np.random.choice(size, size=batch_size, replace=False))
         return batch, None
 
@@ -44,7 +44,7 @@ class PrioritizedReplaySampler(AbstractSampler):
         self.step = 0
         self.random_sampler = RandomSampler()
 
-    def sample(self, batch_size: int, size: int):
+    def sample(self, batch_size: int, size: int, training : bool):
         if self.step >= self.duration:
             self.step += 1
             return self.random_sampler.sample(batch_size=batch_size, size=size)
@@ -55,18 +55,17 @@ class PrioritizedReplaySampler(AbstractSampler):
         weights = (size * self.priorities[batch] / (self.priorities.sum() + 1E-8)) ** (-beta)
         weights = weights / (np.amax(weights) + 1E-12)
 
-        self.last_batch = batch
         self.step += 1
         return torch.tensor(batch).long(), torch.from_numpy(weights)
 
-    def train_callback(self, agent: "AbstractAgent", infos: dict):
-        td_errors = infos["td_errors"].abs().cpu().numpy()
-        self.priorities[self.last_batch] = (td_errors + 1e-6) ** self.alpha
+    def train_callback(self, batch : torch.Tensor, td_errors: torch.Tensor, **kwargs):
+        td_errors = td_errors.abs().cpu().numpy()
+        self.priorities[batch.cpu().numpy()] = (td_errors + 1e-6) ** self.alpha
 
     @torch.no_grad()
     def store(self, agent: "AbstractAgent", **kwargs):
         assert isinstance(
-            agent, AbstractQAgent
+            agent, AbstractValueAgent
         ), "PrioritizedReplaySampler can only be used with QAgents"
         state = torch.as_tensor(kwargs["state"])
         action = torch.as_tensor(kwargs["action"])
@@ -74,9 +73,9 @@ class PrioritizedReplaySampler(AbstractSampler):
         next_state = torch.as_tensor(kwargs["next_state"])
         done = torch.as_tensor(kwargs["done"])
 
-        y_true, y_pred = agent.compute_target_predictions(
+        y_true, y_pred = agent.q_function.compute_target_predictions(
             state=state, action=action, reward=reward, next_state=next_state, done=done
         )
-        td_errors = agent.compute_td_errors(y_true=y_true, y_pred=y_pred).abs().cpu().numpy()
+        td_errors = agent.q_function.compute_td_errors(y_true=y_true, y_pred=y_pred).abs().cpu().numpy()
         new_priorities = (td_errors + 1e-6) ** self.alpha 
         self.priorities.add(new_priorities)

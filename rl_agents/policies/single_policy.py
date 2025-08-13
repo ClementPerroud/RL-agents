@@ -1,11 +1,11 @@
-from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
+from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.agent import AbstractAgent
 import numpy as np
 
 
 # Use for testing purpose
-class SingleActionProxy(
-    AbstractActionStrategy,
+class DummyPolicy(
+    AbstractPolicy,
 ):
     def __init__(self, action):
         super().__init__()

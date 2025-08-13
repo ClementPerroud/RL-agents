@@ -1,6 +1,6 @@
-from rl_agents.action_strategy.single_action_strategy import SingleActionProxy
-from rl_agents.action_strategy.epsilon_greedy_strategy import (
-    EspilonGreedyActionStrategy,
+from rl_agents.policy.single_policy import SingleActionProxy
+from rl_agents.policy.epsilon_greedy_strategy import (
+    EspilonGreedyPolicy,
 )
 
 import numpy as np
@@ -12,10 +12,6 @@ class AgentTest:
         self.nb_env = nb_env
         self.training = True
         self.action_model = SingleActionProxy(action=-1)
-
-    def _pick_deterministic_action(self, states):
-        return self.action_model.pick_action(self, states)
-
 
 def test_signeactionmodel_pick_action():
     state = np.random.rand(5, 3)
@@ -30,7 +26,7 @@ def test_epsilon_greedy_all_model():
     action_space = Discrete(4)
     state = np.random.rand(4, 2)
     agent = AgentTest(nb_env=4)
-    strategy = EspilonGreedyActionStrategy(
+    strategy = EspilonGreedyPolicy(
         q=0.99, min_epsilon=0.01, action_space=action_space
     )
     strategy.epsilon = 0.0
@@ -43,7 +39,7 @@ def test_epsilon_greedy_all_random():
     nb_env = 10
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
-    proxy = EspilonGreedyActionStrategy(
+    proxy = EspilonGreedyPolicy(
         q=0.99, min_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 1.0
@@ -59,7 +55,7 @@ def test_epsilon_greedy_statistical_test_1():
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
 
-    proxy = EspilonGreedyActionStrategy(
+    proxy = EspilonGreedyPolicy(
         q=0.99, min_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 0.8
@@ -74,7 +70,7 @@ def test_epsilon_greedy_statistical_test_2():
     nb_env = 100000
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
-    proxy = EspilonGreedyActionStrategy(
+    proxy = EspilonGreedyPolicy(
         q=0.99, min_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 0.3

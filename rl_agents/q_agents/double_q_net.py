@@ -23,10 +23,10 @@ class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
 
         self._copy_weights()
 
-    def forward(self, *args, target: bool = False, **kwargs):
-        if target:
-            return self.q_net_target.forward(*args, target=True, **kwargs)
-        return self.q_net.forward(*args, target=False, **kwargs)
+    def forward(self, *args, training, **kwargs):
+        if training:
+            return self.q_net.forward(*args, target=False, **kwargs)
+        return self.q_net_target.forward(*args, target=True, **kwargs)
 
     @torch.no_grad()
     def update(self, agent: AbstractAgent):

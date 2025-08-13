@@ -1,4 +1,4 @@
-from rl_agents.action_strategy.action_strategy import AbstractActionStrategy
+from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.service import AgentService
 
 from abc import ABC, abstractmethod
@@ -10,19 +10,17 @@ class Mode(Enum):
     TRAINING = 0
     EVAL = 1
 
-class AbstractAgent(AbstractActionStrategy, AgentService, ABC):
+class AbstractAgent(AbstractPolicy, AgentService, ABC):
     def __init__(
         self,
         nb_env: int,
-        action_strategy: AbstractActionStrategy,
-        device : torch.DeviceObjType = None,
+        policy: AbstractPolicy
     ):
         self.nb_env = nb_env
-        self.action_strategy = action_strategy.connect(self)
+        self.policy = policy.connect(self)
 
         self.episode = 0
         self.step = 0
-        self.device = device
 
     @property
     def services(self) -> set["AgentService"]:
@@ -46,14 +44,16 @@ class AbstractAgent(AbstractActionStrategy, AgentService, ABC):
     @abstractmethod
     def train_agent(self): ...
 
-    @abstractmethod
-    def _pick_deterministic_action(self, state: torch.Tensor) -> np.ndarray: ...
-
-    def pick_action(self, state):
-        action = self.action_strategy.pick_action(agent=self, state=state)
+    def pick_action(self, state : np.ndarray, training = None):
+        if training is None: 
+            training = self.mode.value == Mode.TRAINING.value # Make training true if the agent is setting to train
+        state = torch.as_tensor(state, dtype=torch.float32)
+        if self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1):
+            state = state[None, ...]
+        action = self.policy.pick_action(agent=self, state=state, training = training)
 
         self.update()
-        return action
+        return action.numpy()
 
     @abstractmethod
     def train(self): ...

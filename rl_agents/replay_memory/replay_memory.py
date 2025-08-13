@@ -7,6 +7,7 @@ from collections import deque
 import torch
 import numpy as np
 from gymnasium.spaces import Space, Box
+from functools import partial
 
 from typing import TYPE_CHECKING
 
@@ -19,7 +20,13 @@ class AbstractReplayMemory(AgentService, ABC):
     def store(self, agent: "AbstractAgent", **kwargs): ...
 
     @abstractmethod
-    def sample(self, batch_size: int): ...
+    def sample(self, batch_size: int, training : bool): ...
+
+    @abstractmethod
+    def get(self, index : int): ...
+
+    @abstractmethod
+    def reset(self): ...
 
     def train_callback(self, agent: "AbstractAgent", infos: torch.Tensor): ...
 
@@ -39,7 +46,6 @@ class BaseReplayMemory(
         torch.nn.Module.__init__(self)
         AgentService.__init__(self)
         self.length = int(length)
-        self.tensor_memories = {}
         self.names = names
         self.sizes = {name:(self.length,) + size for name, size in zip(self.names, sizes)}
         self.dtypes = {name:dtype for name, dtype in zip(self.names, dtypes)}
@@ -50,10 +56,13 @@ class BaseReplayMemory(
         assert self.n == len(sizes) and self.n == len(
             dtypes
         ), f"names ({len(names)}), sizes ({len(sizes)}), dtypes ({len(dtypes)}) must have the same length"
+        self.reset()
 
-        for name in names:
+    def reset(self):
+        self.tensor_memories = {}
+        for name in self.names:
             self.tensor_memories[name] = torch.zeros(
-                size=self.sizes[name], dtype=self.dtypes[name], device=device
+                size=self.sizes[name], dtype=self.dtypes[name], device=self.device
             )
 
         self.i: int = 0
@@ -90,16 +99,24 @@ class BaseReplayMemory(
         self.sampler.store(agent=agent, **kwargs)
 
     @torch.no_grad()
-    def sample(self, batch_size: int):
+    def sample(self, batch_size: int, training : bool):
         if self.size() < batch_size:
             return
 
-        batch, weights = self.sampler.sample(batch_size=batch_size, size=self.size())
+        batch, weights = self.sampler.sample(batch_size=batch_size, size=self.size(), training = training)
+        elements = self.get(index=batch)
+        elements["weight"] = weights
+        elements["callbacks_q_function_training"] = [partial(self.sampler.train_callback, batch = batch)]
+        return elements
+
+    
+    def get(self, index : int | np.ndarray, name = None):
+        if name is not None: return self.tensor_memories[name][index]
         elements = {}
         for name in self.names:
-            elements[name] = self.tensor_memories[name][batch]
-        elements["weight"] = weights
+            elements[name] = self.tensor_memories[name][index]
         return elements
+
 
     @torch.no_grad()
     def train_callback(self, agent: "AbstractAgent", infos: dict):
