@@ -8,6 +8,7 @@ import torch
 import numpy as np
 from gymnasium.spaces import Space, Box
 from functools import partial
+import logging
 
 from typing import TYPE_CHECKING
 
@@ -174,7 +175,7 @@ class MultiStepReplayMemory(BaseReplayMemory):
         sampler: AbstractSampler,
         device=None,
     ):
-
+        logging.warning(0, f"When using {self.__class__.__name__}, please provide the multi_step parameter for the services that support it (e.g : DQNFunction, DistributionalDQNFunction ...)")
         assert isinstance(observation_space, Box)
         self.multi_step, self.gamma, self.nb_env = multi_step, gamma, nb_env
         self.buffers = [deque(maxlen=multi_step) for _ in range(nb_env)]

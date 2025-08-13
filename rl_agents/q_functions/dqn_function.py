@@ -14,7 +14,8 @@ class DQNFunction(AbstractQFunction, torch.nn.Module):
             q_net : AbstractDeepQNeuralNetwork,
             optimizer : torch.optim.Optimizer,
             loss_fn: torch.nn.modules.loss._Loss,
-            gamma : float
+            gamma : float,
+            multi_steps = None,
         ):
         torch.nn.Module.__init__(self)
         self.q_net = q_net.connect(self)
@@ -22,6 +23,7 @@ class DQNFunction(AbstractQFunction, torch.nn.Module):
         self.loss_fn = loss_fn
         self.loss_fn.reduction = "none"
         self.gamma = gamma
+        if multi_steps is not None: self.gamma **= multi_steps
 
 
     def Q(self, state: torch.Tensor, training : bool) -> torch.Tensor:

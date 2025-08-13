@@ -21,8 +21,9 @@ class DistributionalDQNFunction(DQNFunction):
             optimizer : torch.optim.Optimizer,
             loss_fn: torch.nn.modules.loss._Loss,
             gamma : float,
+            multi_steps = None,
         ):
-        super().__init__(q_net=q_net, optimizer= optimizer, loss_fn=loss_fn, gamma=gamma)
+        super().__init__(q_net=q_net, optimizer= optimizer, loss_fn=loss_fn, gamma=gamma, multi_steps= multi_steps)
         self.nb_atoms = nb_atoms
         self.v_min = v_min
         self.v_max = v_max
