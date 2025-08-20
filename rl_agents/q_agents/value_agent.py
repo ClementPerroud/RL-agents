@@ -3,7 +3,7 @@ from rl_agents.agent import AbstractAgent
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.policies.policy import AbstractPolicy
-    from rl_agents.q_functions.q_function import AbstractQFunction
+    from rl_agents.value_functions.q_function import AbstractQFunction
 
 import torch
 from abc import ABC, abstractmethod
@@ -24,4 +24,4 @@ class AbstractValueAgent(AbstractAgent, ABC):
     # def compute_td_errors(self): ...
 
     # @abstractmethod
-    # def compute_target_predictions(self): ...
+    # def compute_loss_inputs(self): ...

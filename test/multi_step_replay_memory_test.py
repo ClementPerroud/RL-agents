@@ -31,7 +31,7 @@ def test_multistep_replay_memory_store_handles_agent():
         reward=reward,
         done=not_done,
     )
-    assert memory.size() == 0
+    assert len(memory) == 0
 
     memory.store(
         agent=agent,
@@ -41,7 +41,7 @@ def test_multistep_replay_memory_store_handles_agent():
         reward=reward,
         done=not_done,
     )
-    assert memory.size() == 1
+    assert len(memory) == 1
 
     memory.store(
         agent=agent,
@@ -52,4 +52,4 @@ def test_multistep_replay_memory_store_handles_agent():
         done=done,
     )
     # flush remaining steps on episode end
-    assert memory.size() == 3
+    assert len(memory) == 3

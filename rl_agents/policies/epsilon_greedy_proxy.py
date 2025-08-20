@@ -50,7 +50,7 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
 
 
 class EspilonGreedyPolicy(BaseEspilonGreedyPolicy):
-    def __init__(self, policy : AbstractPolicy, q: float, start_epsilon : float, end_epsilon: float, action_space: Space):
+    def __init__(self, policy : AbstractPolicy, q: float, action_space: Space, end_epsilon: float, start_epsilon : float = 1):
         super().__init__(policy= policy, action_space=action_space)
         self.q = q
         self.start_epsilon = start_epsilon

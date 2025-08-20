@@ -15,7 +15,9 @@ from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayM
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.q_agents.dqn import DQNAgent
 from rl_agents.q_agents.noisy_net_strategy import NoisyNetProxy
-from rl_agents.q_functions.distributional_dqn_function import DistributionalDQNFunction, CategoricalLoss
+from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
+from rl_agents.trainers.trainer import Trainer
+
 
 import torch
 import numpy as np
@@ -23,7 +25,7 @@ import gymnasium as gym
 from collections import deque
 
 
-class CategoricalQNN(AbstractDeepQNeuralNetwork):
+class DistributionalQNN(AbstractDeepQNeuralNetwork):
     def __init__(self, nb_atoms : int, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D
@@ -59,16 +61,17 @@ def main():
     observation_space = single_env.observation_space # open, high, low, close, volume
 
     replay_memory = MultiStepReplayMemory(
-        length = memory_size,
+        max_length = memory_size,
         nb_env= nb_env,
         gamma = gamma,
         multi_step= multi_step,
-        # sampler= RandomSampler(),
-        sampler= PrioritizedReplaySampler(length=memory_size, duration= 150_000),
-        observation_space= observation_space)
+        sampler= RandomSampler(),
+        # sampler= PrioritizedReplaySampler(length=memory_size, duration= 150_000),
+        observation_space= observation_space,
+    )
 
 
-    q_net = CategoricalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
+    q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
         tau= 20
@@ -76,10 +79,15 @@ def main():
     q_function = DistributionalDQNFunction(
         nb_atoms=nb_atoms,
         v_min=v_min, v_max=v_max,
-        q_net=q_net,
-        optimizer=torch.optim.AdamW(q_net.parameters(), lr= 1E-3, amsgrad= True),
-        loss_fn = CategoricalLoss(),
-        gamma= gamma ** multi_step
+        net=q_net,
+        trainer= Trainer(
+            optimizer=torch.optim.AdamW(q_net.parameters(), lr= 1E-3, amsgrad= True),
+            loss_fn = DistributionalLoss(),
+            replay_memory= replay_memory,
+            batch_size= 128,
+        ),
+        gamma= gamma,
+        multi_steps= multi_step,
     )
     # q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
 
@@ -94,8 +102,6 @@ def main():
         nb_env= nb_env,
         policy= policy,
         train_every= 1,
-        replay_memory= replay_memory,
-        batch_size= 128,
         q_function=q_function
     )
 
@@ -112,7 +118,7 @@ def main():
         # print(state, action, reward, next_state, done, truncated)
         done = done | truncated
 
-        agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done)
+        agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
         loss = agent.train_agent()
 
         if loss is not None: episode_losses.append(loss)

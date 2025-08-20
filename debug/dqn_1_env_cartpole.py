@@ -13,8 +13,9 @@ from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
-from rl_agents.q_functions.dqn_function import DQNFunction
+from rl_agents.value_functions.dqn_function import DQNFunction
 from rl_agents.q_agents.dqn import DQNAgent
+from rl_agents.trainers.trainer import Trainer
 
 import torch
 import numpy as np
@@ -53,7 +54,7 @@ def main():
         nb_env= nb_env,
         multi_step= 3,
         gamma= gamma,
-        length = memory_size,
+        max_length = memory_size,
         sampler= PrioritizedReplaySampler(length=memory_size, duration= 100_000),
         observation_space= observation_space)
 
@@ -63,10 +64,13 @@ def main():
         tau= 200
     )
     q_function = DQNFunction(
-        q_net= q_net,
-        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
-        loss_fn= torch.nn.MSELoss(),
-        gamma= gamma ** replay_memory.multi_step
+        _net= q_net,
+        gamma= gamma ** replay_memory.multi_step,
+        trainer= Trainer(
+            replay_memory=replay_memory,
+            loss_fn= torch.nn.MSELoss(),
+            optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        ),
     )
     policy = EspilonGreedyPolicy(
         q = 1 - 4E-4,
@@ -101,7 +105,7 @@ def main():
             # print(state, action, reward, next_state, done, truncated)
             done = done or truncated
 
-            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done)
+            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()
 
             if loss is not None: episode_losses.append(loss)

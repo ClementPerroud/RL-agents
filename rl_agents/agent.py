@@ -42,18 +42,23 @@ class AbstractAgent(AbstractPolicy, AgentService, ABC):
             self._find_services(service=sub_service, _first=False)
 
     @abstractmethod
-    def train_agent(self): ...
-
+    def train_agent(self):
+        assert self.mode.value == Mode.TRAINING.value, "Please set the agent in training mode using .train()"
+    
     def pick_action(self, state : np.ndarray, training = None):
         if training is None: 
             training = self.mode.value == Mode.TRAINING.value # Make training true if the agent is setting to train
         state = torch.as_tensor(state, dtype=torch.float32)
-        if self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1):
-            state = state[None, ...]
+
+        single_env_condition = self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1)
+        if single_env_condition: state = state.unsqueeze(0)
+
         action = self.policy.pick_action(agent=self, state=state, training = training)
+        
+        if single_env_condition: action = action.squeeze(0)
 
         self.update()
-        return action.numpy()
+        return action.detach().numpy()
 
     @abstractmethod
     def train(self): ...

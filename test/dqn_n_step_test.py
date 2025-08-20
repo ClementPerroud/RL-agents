@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from gymnasium.spaces import Box
 
-from rl_agents.policy.policy import AbstractPolicy
+from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.q_agents.dqn import DQNAgent
 from rl_agents.replay_memory.replay_memory import MultiStepReplayMemory
@@ -66,7 +66,7 @@ def test_dqn_agent_n_step_replay_memory():
         dones.append(done.copy())
 
     expected_size = 1000 - n_steps + 1
-    assert memory.size() == expected_size
+    assert len(memory) == expected_size
 
     mem_state = memory.tensor_memories["state"][:expected_size].cpu().numpy()
     mem_action = memory.tensor_memories["action"][:expected_size].cpu().numpy()

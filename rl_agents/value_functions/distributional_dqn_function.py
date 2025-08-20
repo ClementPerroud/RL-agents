@@ -1,10 +1,11 @@
-from rl_agents.q_functions.dqn_function import DQNFunction
+from rl_agents.value_functions.dqn_function import DQNFunction
 from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
 from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.trainers.trainer import Trainer
 import torch
 import matplotlib.pyplot as plt
 
-class CategoricalLoss(torch.nn.modules.loss._Loss):
+class DistributionalLoss(torch.nn.modules.loss._Loss):
     def __init__(self):
         super().__init__()
         
@@ -17,13 +18,12 @@ class DistributionalDQNFunction(DQNFunction):
             nb_atoms : int,
             v_min : float,
             v_max : float,
-            q_net : AbstractDeepQNeuralNetwork,
-            optimizer : torch.optim.Optimizer,
-            loss_fn: torch.nn.modules.loss._Loss,
+            net : AbstractDeepQNeuralNetwork,
             gamma : float,
+            trainer : Trainer = None,
             multi_steps = None,
         ):
-        super().__init__(q_net=q_net, optimizer= optimizer, loss_fn=loss_fn, gamma=gamma, multi_steps= multi_steps)
+        super().__init__(net=net, trainer = trainer, gamma=gamma, multi_steps= multi_steps)
         self.nb_atoms = nb_atoms
         self.v_min = v_min
         self.v_max = v_max
@@ -40,13 +40,17 @@ class DistributionalDQNFunction(DQNFunction):
             y_true * (y_true.add(1e-8).log() - y_pred.add(1e-8).log())
         ).sum(dim=-1)
 
-    def compute_target_predictions(
+    def out_to_value(self, inputs):
+        return (inputs * self._atoms).sum(dim = -1)
+
+    def compute_loss_inputs(
         self,
         state: torch.Tensor,  # [batch, state_shape ...] obtained at t
         action: torch.Tensor,  # [batch] obtained at t+multi_steps
         reward: torch.Tensor,  # [batch] obtained between t+1 and t+multi_step (then summed up using discounted sum)
         next_state: torch.Tensor,  # [batch, state_shapes ...] obtained at t+multi_steps
         done: torch.Tensor,  # [batch] obtained at t+multi_steps
+        **kwargs
     ):  
         
         batch_size = state.size(0)
@@ -54,7 +58,7 @@ class DistributionalDQNFunction(DQNFunction):
 
         with torch.no_grad():
             p_next = self.Q(state=next_state, training= False, return_atoms= True) #[batch, nb_actions, nb_atoms]
-            q_next = (p_next * self._atoms).sum(dim = -1) # [batch, nb_actions]
+            q_next = self.out_to_value(p_next) # [batch, nb_actions]
             a_star = torch.argmax(q_next, dim = 1, keepdim= True) #[batch]
             p_next = p_next.gather(1, a_star.unsqueeze(-1).expand(-1, 1, self.nb_atoms)).squeeze(1) # [batch, nb_atoms]
 
@@ -77,9 +81,9 @@ class DistributionalDQNFunction(DQNFunction):
         return y_true, y_pred #both : [batch, nb_atoms]
 
     def Q(self, state: torch.Tensor, training=False, return_atoms = False) -> torch.Tensor:
-        q_logits = self.q_net.forward(state, training=training)
+        q_logits = self.net.forward(state, training=training)
         q_prob = torch.softmax(q_logits, dim=-1) #[batch/nb_env, nb_actions, nb_atoms]
-        return q_prob if return_atoms else q_prob @ self._atoms
+        return q_prob if return_atoms else self.out_to_value(q_prob)
     
     def Q_a(
         self, state: torch.Tensor, actions: torch.Tensor, training=False, return_atoms = False
@@ -94,7 +98,7 @@ class DistributionalDQNFunction(DQNFunction):
         Estime la distribution C51 moyenne P(z|a) sur `n_samples` transitions,
         sans jamais dépasser `max_batch` exemples simultanément sur le GPU.
         """
-        if replay_memory.size() == 0:
+        if len(replay_memory) == 0:
             print("ReplayMemory is empty.")
             return
 

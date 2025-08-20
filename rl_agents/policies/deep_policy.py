@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 
 import torch
 import math
+import gymnasium as gym
 from abc import abstractmethod
 
 class AbstractDeepPolicy(
@@ -20,10 +21,14 @@ class AbstractDeepPolicy(
     def evaluate_action_log_likelihood(self, agent: 'AbstractAgent', action_distributions : torch.Tensor, action : torch.Tensor, training : bool):
         ...
     
+    @abstractmethod
+    def entropy_loss(self, action_probs : torch.Tensor):
+        ...
     
     def __init__(self, policy_net : torch.nn.Module, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.policy_net = policy_net
+        self.last_log_prob = 0
 
 
 class DiscreteDeepPolicy(AbstractDeepPolicy):
@@ -32,45 +37,85 @@ class DiscreteDeepPolicy(AbstractDeepPolicy):
         action_probabilities : torch.Tensor= self.policy_net.forward(state, training = training)
         # action_probabilities : [batch, nb_action]
         assert action_probabilities.ndim == 2, f"The policy_net ouput must be of shape [batch, nb_action] while current shape is {action_probabilities.shape}"
-        assert (action_probabilities.sum(-1) - 1).abs() < 1E-6, "The probabilities for each action must sum up to 1. Please apply softmax before returning the output"
-        return action_probabilities
+        assert ((action_probabilities.sum(-1) - 1).abs() < 1E-6).all(), "The probabilities for each action must sum up to 1. Please apply softmax before returning the output"
+        
+        return (action_probabilities,)
     
     def evaluate_action_log_likelihood(self, agent: 'AbstractAgent', action_distributions: torch.Tensor, action : torch.Tensor, training : bool)-> torch.Tensor:
-        return (action_distributions[action.long()] + 1E-8).log()
+        action_probabilities, = action_distributions
+        return (
+            torch.take_along_dim(action_probabilities, action.long().unsqueeze(-1), dim = -1).squeeze(-1).clamp_min(1E-8)
+        ).log()
 
     def pick_action(self, agent, state : torch.Tensor, training : bool)-> torch.Tensor:
         # state : [batch, state_shape ...]
-        action_probabilities : torch.Tensor= self.action_distributions(agent=agent, state=state, training=training)
-        actions = torch.multinomial(input=action_probabilities, num_samples=1) # Pick the actions randomly following their given probabilities.
-        return actions 
+        action_probabilities, = self.action_distributions(agent=agent, state=state, training=training)
+        action = torch.multinomial(input=action_probabilities, num_samples=1) # Pick the actions randomly following their given probabilities.
+        
+        self.last_log_prob = self.evaluate_action_log_likelihood(agent=agent, action_distributions= (action_probabilities,), action=action, training=training)
+        return action.squeeze(-1)
         # shape [batch]
 
+    def entropy_loss(self, action_probs : torch.Tensor):
+        return torch.distributions.Categorical(probs = action_probs).entropy().mean()
 
 class ContinuousDeepPolicy(AbstractDeepPolicy):
+    def __init__(self, action_space : gym.spaces.Box, policy_net, *args, **kwargs):
+        self.low = torch.as_tensor(action_space.low, dtype = torch.float32)
+        self.high = torch.as_tensor(action_space.high, dtype = torch.float32)
+        self.scale = (self.high - self.low)/2
+        self.loc = (self.high + self.low)/2
+
+        super().__init__(policy_net=policy_net, *args, **kwargs)
 
     def action_distributions(self, agent: 'AbstractAgent', state, training) -> torch.Tensor:
         action_mean, action_log_std = self.policy_net.forward(state, training = training) # type: ignore
         action_mean : torch.Tensor
         action_log_std : torch.Tensor
 
-        assert action_mean.ndim > 2, f"The policy_net ouput must be of shape [batch, nb_action] while current shape is {action_mean.shape}"
+        assert action_mean.ndim >= 2, f"The policy_net ouput must be of shape [batch, nb_action] while current shape is {action_mean.shape}"
         assert action_mean.ndim == action_log_std.ndim, f"Both outputs (mean, log std) must have the same shape ({action_mean.shape} != {action_log_std.shape})"
         if action_mean.ndim == 1: # Make it -> [batch, 1] because nb_action = 1
             action_mean.unsqueeze_(-1)
             action_log_std.unsqueeze_(-1)
         return action_mean, action_log_std
     
-    c = - math.log(2*math.pi) / 2
     def evaluate_action_log_likelihood(self, agent: 'AbstractAgent', action_distributions : tuple[torch.Tensor, torch.Tensor], action : torch.Tensor, training : bool)-> torch.Tensor:
-        mean_prob, log_std_prob = action_distributions 
-        log_likelihood = self.c - log_std_prob -  (action - mean_prob).pow(2) / (2 * (log_std_prob.exp().pow(2)))
-        return log_likelihood
+        mean, log_std = action_distributions
+        std = log_std.exp()
+
+        # map action back to (-1,1) then to u-space
+        a_tanh = ((action - self.loc) / self.scale).clamp(-0.999999, 0.999999)
+        u = self._atanh(a_tanh)
+
+        base = torch.distributions.Normal(mean, std)
+        log_prob_u = base.log_prob(u).sum(dim=-1)
+
+        corr = (torch.log(1 - a_tanh.pow(2) + 1e-6)).sum(dim=-1)
+        corr += torch.log(self.scale).sum()
+        return log_prob_u - corr
+
+    @staticmethod
+    def _atanh(x, eps=1e-6):
+        x = x.clamp(-1 + eps, 1 - eps)
+        return 0.5 * (torch.log1p(x) - torch.log1p(-x))
+    
+    def _squash(self, u):
+        a = torch.tanh(u)
+        return self.loc + a * self.scale, a 
 
     def pick_action(self, agent: 'AbstractAgent', state : torch.Tensor, training : bool):
         # state : [batch, state_shape ...]
         action_mean, action_log_std = self.action_distributions(agent=agent, state=state, training=training)
-        
+
         # action_mean : [batch, nb_action], action_log_std [batch, nb_actions]
-        actions = torch.normal(mean= action_mean, std = action_log_std.exp()) # Pick the actions randomly following their given probabilities.
-        return actions
+        action_std = action_log_std.exp()
+        u = action_mean + action_std * torch.randn_like(action_mean)  # reparam/sample
+        action, _ = self._squash(u)            # [1,A]
+        
+        self.last_log_prob = self.evaluate_action_log_likelihood(agent=agent, action_distributions= (action_mean, action_log_std), action=action, training=training)
+        return action
         # shape [batch]
+
+    def entropy_loss(self, mean : torch.Tensor, log_std : torch.Tensor):
+        return torch.distributions.Normal(mean, log_std.exp()).entropy().mean()

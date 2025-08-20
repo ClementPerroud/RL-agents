@@ -16,7 +16,8 @@ class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
         super().__init__(*args, **kwargs)
         self.tau = tau
         self.q_net: AbstractDeepQNeuralNetwork = q_net
-        self.q_net_target: AbstractDeepQNeuralNetwork = deepcopy(q_net).requires_grad_(False)
+        self.q_net_target: AbstractDeepQNeuralNetwork = deepcopy(q_net)
+        self.q_net_target.requires_grad_(False)
 
         self.q_net = self.q_net.connect(self)
         self.q_net_target = self.q_net_target.connect(self)

@@ -1,10 +1,10 @@
-from rl_agents.replay_memory.replay_memory import BaseReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler, RandomSampler
+from rl_agents.replay_memory.replay_memory import BaseReplayMemory
 
-import torch
 from gymnasium.spaces import Space, Box
+import torch
 
-class RolloutMemory(BaseReplayMemory):
+class PPOTrainingMemory(BaseReplayMemory):
     def __init__(
         self,
         max_length: int,
@@ -20,11 +20,12 @@ class RolloutMemory(BaseReplayMemory):
 
         super().__init__(
             max_length=max_length,
-            names=["state", "action", "next_state", "reward",  "done", "truncated", "old_action_log_likelihood"],
+            names=["state", "action", "next_state", "reward", "done", "truncated", "old_action_log_likelihood", "advantage"],
             sizes=[
                 self.observation_space.shape,
                 action_space.shape,
                 self.observation_space.shape,
+                (),
                 (),
                 (),
                 (),
@@ -37,6 +38,7 @@ class RolloutMemory(BaseReplayMemory):
                 torch.float32,
                 torch.bool,
                 torch.bool,
+                torch.float32,
                 torch.float32,
             ],
             sampler=sampler,

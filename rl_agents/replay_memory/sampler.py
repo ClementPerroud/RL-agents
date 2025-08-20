@@ -34,12 +34,12 @@ class RandomSampler(AbstractSampler):
 
 class PrioritizedReplaySampler(AbstractSampler):
 
-    def __init__(self, length: int, alpha=0.65, beta_0=0.5, duration=150_000):
-        self.length = int(length)
+    def __init__(self, max_length: int, alpha=0.65, beta_0=0.5, duration=150_000):
+        self.max_length = int(max_length)
         self.alpha = alpha
         self.beta_0 = beta_0
         self.duration = duration
-        self.priorities = SumTree(size=self.length)
+        self.priorities = SumTree(size=self.max_length)
         self.last_batch = None
         self.step = 0
         self.random_sampler = RandomSampler()
@@ -73,7 +73,7 @@ class PrioritizedReplaySampler(AbstractSampler):
         next_state = torch.as_tensor(kwargs["next_state"])
         done = torch.as_tensor(kwargs["done"])
 
-        y_true, y_pred = agent.q_function.compute_target_predictions(
+        y_true, y_pred = agent.q_function.compute_loss_inputs(
             state=state, action=action, reward=reward, next_state=next_state, done=done
         )
         td_errors = agent.q_function.compute_td_errors(y_true=y_true, y_pred=y_pred).abs().cpu().numpy()
