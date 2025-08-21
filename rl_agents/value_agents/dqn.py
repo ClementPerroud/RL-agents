@@ -1,10 +1,10 @@
 from rl_agents.agent import AbstractAgent, Mode
 from rl_agents.replay_memory.replay_memory import AbstractReplayMemory, MultiStepReplayMemory
-from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.value_functions.q_function import AbstractQFunction
 from rl_agents.value_functions.dqn_function import DQNFunction
 from rl_agents.policies.policy import AbstractPolicy
-from rl_agents.q_agents.value_agent import AbstractValueAgent
+from rl_agents.value_agents.value_agent import AbstractValueAgent
 
 import torch
 import numpy as np

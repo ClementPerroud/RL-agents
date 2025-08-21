@@ -1,4 +1,4 @@
-from rl_agents.q_agents.value_agent import AbstractValueAgent
+from rl_agents.value_agents.value_agent import AbstractValueAgent
 from rl_agents.service import AgentService
 from rl_agents.utils.sumtree import SumTree
 

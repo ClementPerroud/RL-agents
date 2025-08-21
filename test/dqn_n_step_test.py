@@ -4,7 +4,7 @@ from gymnasium.spaces import Box
 
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.value_functions.dqn_function import AbstractDeepQNeuralNetwork, DQNFunction
-from rl_agents.q_agents.dqn import DQNAgent
+from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.replay_memory.replay_memory import MultiStepReplayMemory
 from rl_agents.trainers.trainer import Trainer
 from rl_agents.replay_memory.sampler import RandomSampler

@@ -1,6 +1,6 @@
 from rl_agents.value_functions.dqn_function import DQNFunction
 from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
-from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.trainers.trainer import Trainer
 import torch
 import matplotlib.pyplot as plt

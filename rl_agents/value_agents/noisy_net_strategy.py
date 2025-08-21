@@ -1,4 +1,4 @@
-from rl_agents.q_agents.double_q_net import AbstractDeepQNeuralNetwork
+from rl_agents.value_agents.double_q_net import AbstractDeepQNeuralNetwork
 import torch
 import torch.nn as nn
 from torchrl.modules import NoisyLinear  # requires torchrl

@@ -7,7 +7,7 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.trainers.trainer import Trainer
 
 from rl_agents.policy_agents.ppo_agent import PPOAgent, PPOLoss

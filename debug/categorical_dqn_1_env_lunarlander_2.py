@@ -7,13 +7,13 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
-from rl_agents.q_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
-from rl_agents.q_agents.dqn import DQNAgent
-from rl_agents.q_agents.noisy_net_strategy import NoisyNetProxy
+from rl_agents.value_agents.dqn import DQNAgent
+from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
 from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.trainers.trainer import Trainer

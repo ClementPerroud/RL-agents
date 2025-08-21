@@ -7,14 +7,14 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.q_agents.deep_q_model import AbstractDeepQNeuralNetwork
-from rl_agents.q_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_functions.dqn_function import DQNFunction
-from rl_agents.q_agents.dqn import DQNAgent
+from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.trainers.trainer import Trainer
 
 import torch
@@ -47,7 +47,7 @@ def main():
     observation_space = env.observation_space # open, high, low, close, volume
 
     nb_env = 1
-    memory_size = 1E7
+    memory_size = 1E5
     gamma = 0.99
 
     replay_memory = MultiStepReplayMemory(
@@ -61,15 +61,16 @@ def main():
     q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 200
+        tau= 50
     )
     q_function = DQNFunction(
-        _net= q_net,
+        net= q_net,
         gamma= gamma ** replay_memory.multi_step,
         trainer= Trainer(
             replay_memory=replay_memory,
             loss_fn= torch.nn.MSELoss(),
             optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+            batch_size=64
         ),
     )
     policy = EspilonGreedyPolicy(
@@ -83,8 +84,6 @@ def main():
         nb_env= nb_env,
         policy= policy,
         train_every= 1,
-        replay_memory= replay_memory,
-        batch_size= 128,
         q_function= q_function
     )
 
