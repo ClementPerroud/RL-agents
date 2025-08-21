@@ -1,6 +1,7 @@
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.agent import AbstractAgent
 import numpy as np
+import torch
 
 
 # Use for testing purpose
@@ -9,10 +10,10 @@ class DummyPolicy(
 ):
     def __init__(self, action):
         super().__init__()
-        self.action = np.array(action)
+        self.action = action
 
-    def pick_action(self, agent: AbstractAgent, state: np.ndarray):
-        if agent.nb_env > 1:  # Return must np.array of shape [nb_env,]
-            return np.ones(shape=(state.shape[0],)) * self.action
+    def pick_action(self, agent: AbstractAgent, state: torch.Tensor, training: bool) -> torch.Tensor:
+        if agent.nb_env > 1:  # Return must tensor of shape [nb_env,]
+            return torch.ones(state.shape[0], dtype=torch.long) * self.action
         # Else : nb_env = 1
-        return self.action
+        return torch.tensor(self.action, dtype=torch.long)

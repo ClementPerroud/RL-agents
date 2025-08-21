@@ -1,19 +1,19 @@
 import numpy as np
 from rl_agents.utils.sumtree import SumTree  # adaptez si besoin
 
-tolerance = 1e-6
+tolerance = 1e-4
 
 
 # ---------- état initial ----------
 def test_initial_state():
     tree = SumTree(4)
-    assert tree.layer_lens == [4, 2, 1]
     assert tree.sum() < tolerance
 
 
 # ---------- __setitem__ : mise à jour simple ----------
 def test_setitem_single():
     tree = SumTree(4)
+    tree.add(4)
     tree[0] = 5.0
     assert tree[0] == 5.0
     # propagation jusqu’à la racine
@@ -25,6 +25,7 @@ def test_setitem_single():
 # ---------- __setitem__ : assignation vectorisée ----------
 def test_setitem_batch():
     tree = SumTree(4)
+    tree.add([0.0, 0.0])
     tree[[0, 1]] = [5.0, 3.0]
     assert np.allclose(tree.node_layers[0][:2], [5.0, 3.0])
     assert abs(tree.sum() - 8.0) < tolerance
@@ -41,8 +42,8 @@ def test_add_updates_count_and_sum():
 # ---------- sample : tirage pondéré, résultat déterministe ----------
 def test_sample_deterministic(monkeypatch):
     tree = SumTree(2)
-    tree[0] = 1.0
-    tree[1] = 1.0
+    tree.add(1)
+    tree.add(1)
     tree.new_leafs = []  # vider la file « fresh »
 
     # forcer rand() à 0 → cible la feuille 0

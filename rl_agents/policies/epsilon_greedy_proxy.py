@@ -18,7 +18,7 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
     def pick_action(self, agent: AbstractAgent, state: torch.Tensor, training : bool):
 
         if not training:
-            return self.policy.pick_action(state)
+            return self.policy.pick_action(agent, state, training)
         
         # state : (nb_env, ...)
         rands = torch.rand(agent.nb_env)  # shape : (nb_env,)

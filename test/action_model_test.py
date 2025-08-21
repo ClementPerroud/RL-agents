@@ -1,7 +1,9 @@
 from rl_agents.policies.single_policy import DummyPolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
+from rl_agents.agent import Mode
 
 import numpy as np
+import torch
 from gymnasium.spaces import Discrete
 
 
@@ -9,27 +11,32 @@ class AgentTest:
     def __init__(self, nb_env):
         self.nb_env = nb_env
         self.training = True
+        self.step = 0
+        self.mode = Mode.TRAINING
         self.action_model = DummyPolicy(action=-1)
 
 def test_signeactionmodel_pick_action():
     state = np.random.rand(5, 3)
     agent = AgentTest(nb_env=5)
     model = DummyPolicy(action=-1)
-    out = model.pick_action(agent, state)
+    state_tensor = torch.as_tensor(state, dtype=torch.float32)
+    out = model.pick_action(agent, state_tensor, training=True)
     assert out.shape == (state.shape[0],)
-    assert np.all(out == -1)
+    assert torch.all(out == -1)
 
 
 def test_epsilon_greedy_all_model():
     action_space = Discrete(4)
     state = np.random.rand(4, 2)
     agent = AgentTest(nb_env=4)
+    base_policy = DummyPolicy(action=-1)
     strategy = EspilonGreedyPolicy(
-        q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
+        policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     strategy.epsilon = 0.0
-    out = strategy.pick_action(agent, state)
-    assert np.all(out != 2)
+    state_tensor = torch.as_tensor(state, dtype=torch.float32)
+    out = strategy.pick_action(agent, state_tensor, training=True)
+    assert torch.all(out != 2)
 
 
 def test_epsilon_greedy_all_random():
@@ -37,13 +44,15 @@ def test_epsilon_greedy_all_random():
     nb_env = 10
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
+    base_policy = DummyPolicy(action=-1)
     proxy = EspilonGreedyPolicy(
-        q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
+        policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 1.0
-    out = proxy.pick_action(agent, state)
+    state_tensor = torch.as_tensor(state, dtype=torch.float32)
+    out = proxy.pick_action(agent, state_tensor, training=True)
     assert out.shape[0] == nb_env
-    assert not np.all(out == 1)
+    assert not torch.all(out == 1)
     assert out.min() >= 0 and out.max() < action_space.n
 
 
@@ -52,14 +61,15 @@ def test_epsilon_greedy_statistical_test_1():
     nb_env = 100000
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
-
+    base_policy = DummyPolicy(action=-1)
     proxy = EspilonGreedyPolicy(
-        q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
+        policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 0.8
-    out = proxy.pick_action(agent, state)
+    state_tensor = torch.as_tensor(state, dtype=torch.float32)
+    out = proxy.pick_action(agent, state_tensor, training=True)
     assert out.shape[0] == nb_env
-    pct_random = (out != -1).sum() / np.prod(out.shape)
+    pct_random = (out != -1).sum() / torch.prod(torch.tensor(out.shape))
     assert abs(proxy.epsilon - pct_random.item()) < 0.01
 
 
@@ -68,11 +78,13 @@ def test_epsilon_greedy_statistical_test_2():
     nb_env = 100000
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
+    base_policy = DummyPolicy(action=-1)
     proxy = EspilonGreedyPolicy(
-        q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
+        policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 0.3
-    out = proxy.pick_action(agent, state)
+    state_tensor = torch.as_tensor(state, dtype=torch.float32)
+    out = proxy.pick_action(agent, state_tensor, training=True)
     assert out.shape[0] == nb_env
-    pct_random = (out != -1).sum() / np.prod(out.shape)
+    pct_random = (out != -1).sum() / torch.prod(torch.tensor(out.shape))
     assert abs(proxy.epsilon - pct_random.item()) < 0.01

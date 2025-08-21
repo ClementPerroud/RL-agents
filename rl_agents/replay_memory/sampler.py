@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 class AbstractSampler(AgentService, ABC):
     @abstractmethod
-    def sample(self, batch_size: int, size: int) -> tuple[np.ndarray, np.ndarray]: ...
+    def sample(self, agent : 'AbstractAgent', batch_size: int, size: int) -> tuple[np.ndarray, np.ndarray]: ...
 
     def update(self, agent: "AbstractAgent"): ...
 
@@ -27,7 +27,7 @@ class RandomSampler(AbstractSampler):
     def __init__(self):
         pass
 
-    def sample(self, batch_size: int, size: int, training : bool):
+    def sample(self, agent : "AbstractAgent", batch_size: int, size: int):
         batch = torch.from_numpy(np.random.choice(size, size=batch_size, replace=False))
         return batch, None
 
@@ -41,21 +41,22 @@ class PrioritizedReplaySampler(AbstractSampler):
         self.duration = duration
         self.priorities = SumTree(size=self.max_length)
         self.last_batch = None
-        self.step = 0
         self.random_sampler = RandomSampler()
 
-    def sample(self, batch_size: int, size: int, training : bool):
-        if self.step >= self.duration:
-            self.step += 1
+    def sample(self, agent : "AbstractAgent", batch_size: int, size: int):
+
+        # if self.step < batch_size:
+        #     raise ValueError("Cannot sample batch_size")
+        
+        if agent.step >= self.duration:
             return self.random_sampler.sample(batch_size=batch_size, size=size)
 
-        beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / self.duration)
+        beta = min(1, self.beta_0 + (1 - self.beta_0) * agent.step / self.duration)
 
         batch = self.priorities.sample(batch_size)
-        weights = (size * self.priorities[batch] / (self.priorities.sum() + 1E-8)) ** (-beta)
-        weights = weights / (np.amax(weights) + 1E-12)
+        weights : np.ndarray= (size * self.priorities[batch] / (self.priorities.sum() + 1E-8)) ** (-beta)
+        weights = weights / (weights.max() + 1E-6)
 
-        self.step += 1
         return torch.tensor(batch).long(), torch.from_numpy(weights)
 
     def train_callback(self, batch : torch.Tensor, td_errors: torch.Tensor, **kwargs):

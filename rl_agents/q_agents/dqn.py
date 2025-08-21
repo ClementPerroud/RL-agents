@@ -31,10 +31,11 @@ class DQNAgent(
 
 
     def sample(self):
-        return self.q_function.replay_memory.sample(batch_size=self.q_function.batch_size, training=False)
+        return self.q_function.replay_memory.sample(agent=self, batch_size=self.q_function.batch_size, training=False)
 
     def store(self, **kwargs):
         assert self.training, "Cannot store any memory during eval."
+        
         for key, value in kwargs.items():
             kwargs[key] = torch.as_tensor(value)
             if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
@@ -45,7 +46,7 @@ class DQNAgent(
         super().train_agent()
         
         if self.step % self.train_every == 0:
-            return self.q_function.train_service()
+            return self.q_function.train_service(agent = self)
 
     @property
     def mode(self):

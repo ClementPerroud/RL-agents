@@ -55,7 +55,7 @@ def main():
         multi_step= 3,
         gamma= gamma,
         max_length = memory_size,
-        sampler= PrioritizedReplaySampler(length=memory_size, duration= 100_000),
+        sampler= PrioritizedReplaySampler(max_length=memory_size, duration= 100_000),
         observation_space= observation_space)
 
     q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)

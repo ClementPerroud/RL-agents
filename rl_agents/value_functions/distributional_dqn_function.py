@@ -36,10 +36,11 @@ class DistributionalDQNFunction(DQNFunction):
         y_true: torch.Tensor,  # [batch, state_shape ...] obtained at t
         y_pred: torch.Tensor,  # [batch] obtained at t+multi_steps
     ):
-        return (
-            y_true * (y_true.add(1e-8).log() - y_pred.add(1e-8).log())
-        ).sum(dim=-1)
-
+        # return (
+        #     y_true * (y_true.add(1e-8).log() - y_pred.add(1e-8).log())
+        # ).sum(dim=-1)
+        return self.out_to_value(y_true) - self.out_to_value(y_pred)
+    
     def out_to_value(self, inputs):
         return (inputs * self._atoms).sum(dim = -1)
 
@@ -72,12 +73,10 @@ class DistributionalDQNFunction(DQNFunction):
             u = torch.ceil(b).long().clamp_max(self.nb_atoms - 1) #[batch, nb_atoms]
     
             
-            m = torch.zeros(size = (batch_size, self.nb_atoms)) # [batch, nb_atoms]
-            m.scatter_add_(1, l, p_next * (u.float() - b))
-            m.scatter_add_(1, u, p_next * (b - l.float()))
+            m = torch.zeros(size = (batch_size, self.nb_atoms), dtype=torch.float32) # [batch, nb_atoms]
+            m.scatter_add_(1, l, (p_next * (u.float() - b)).float())
+            m.scatter_add_(1, u, (p_next * (b - l.float())).float())
             y_true = m
-        if torch.isnan(y_pred).any() or torch.isnan(y_true).any():
-            print("Catch")
         return y_true, y_pred #both : [batch, nb_atoms]
 
     def Q(self, state: torch.Tensor, training=False, return_atoms = False) -> torch.Tensor:

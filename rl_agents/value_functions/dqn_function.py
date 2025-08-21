@@ -64,10 +64,10 @@ class DVNFunction(AbstractVFunction, torch.nn.Module):
             y_true = reward.unsqueeze(-1) + (1 - done.float()).unsqueeze(-1) * self.gamma * self.V(next_state, training=False) # is meant to predict the end of the mathematical sequence
         return y_true, y_pred
 
-    def train_service(self):
+    def train_service(self, agent : "AbstractAgent"):
         # Training evert x steps
         with torch.no_grad():
-            samples = self.trainer.replay_memory.sample(batch_size=self.trainer.batch_size, training= True)
+            samples = self.trainer.replay_memory.sample(agent = agent, batch_size=self.trainer.batch_size)
         if samples is None: return None
 
         q_loss = self.train_step(**samples)

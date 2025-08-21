@@ -95,11 +95,11 @@ class BaseReplayMemory(
         self.sampler.store(agent=agent, **kwargs)
 
     @torch.no_grad()
-    def sample(self, batch_size: int, training : bool):
+    def sample(self, agent : "AbstractAgent", batch_size: int):
         if self.__len__() < batch_size:
             return
 
-        batch, weights = self.sampler.sample(batch_size=batch_size, size=self.__len__(), training = training)
+        batch, weights = self.sampler.sample(agent=agent, batch_size=batch_size, size=self.__len__())
         elements = self[batch]
         elements["weight"] = weights
         elements["replay_memory_callbacks"] = [partial(self.sampler.train_callback, batch = batch)]

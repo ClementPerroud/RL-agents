@@ -57,10 +57,11 @@ def main():
     multi_step = 3
     replay_memory = MultiStepReplayMemory(
         max_length = memory_size,
-        nb_env= nb_env,
-        gamma = gamma,
-        multi_step= multi_step,
-        sampler= PrioritizedReplaySampler(max_length=memory_size, duration= 150_000),
+        nb_env=nb_env,
+        gamma=gamma,
+        multi_step=multi_step,
+        # sampler= PrioritizedReplaySampler(alpha = 0.6, max_length=memory_size, duration= 100_000),
+        sampler= RandomSampler(),
         observation_space= observation_space
     )
 
@@ -70,7 +71,7 @@ def main():
         q_net = q_net,
         tau= 20
     )
-    q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
+    # q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
     q_function = DistributionalDQNFunction(
         nb_atoms=nb_atoms, v_min=v_min, v_max=v_max,
         net= q_net,
@@ -83,12 +84,13 @@ def main():
         ),
     )
     policy = ValuePolicy(q_function=q_function)
-    # policy = EspilonGreedyPolicy(
-    #     q = 1 - 1E-4,
-    #     start_epsilon= 0.9,
-    #     end_epsilon= 0.01,
-    #     action_space= action_space
-    # )
+    policy = EspilonGreedyPolicy(
+        q = 1 - 1E-4,
+        start_epsilon= 0.9,
+        end_epsilon= 0.01,
+        action_space= action_space,
+        policy=policy,
+    )
     agent = DQNAgent(
         nb_env= nb_env,
         policy= policy,
@@ -120,13 +122,14 @@ def main():
             
             episode_steps += 1
             state = next_state
-
+        
+        epsilon = policy.epsilon
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
         # print(episode_losses)
 
-        if i >= 150:
-            agent.plot_atoms_distributions()
+        # if i >= 150:
+        #     agent.plot_atoms_distributions()
 
 if __name__ == "__main__":
     import sys
