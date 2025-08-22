@@ -29,9 +29,7 @@ class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
     def train_callback(self, agent: "AbstractAgent", infos: torch.Tensor): ...
 
 
-class BaseReplayMemory(
-    torch.nn.Module, AbstractReplayMemory  # Make methode .to(device) available
-):
+class BaseReplayMemory(AbstractReplayMemory):
     def __init__(
         self,
         max_length: int,

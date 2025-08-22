@@ -1,6 +1,5 @@
 from rl_agents.policies.single_policy import DummyPolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
-from rl_agents.agent import Mode
 
 import numpy as np
 import torch
@@ -12,7 +11,6 @@ class AgentTest:
         self.nb_env = nb_env
         self.training = True
         self.step = 0
-        self.mode = Mode.TRAINING
         self.action_model = DummyPolicy(action=-1)
 
 def test_signeactionmodel_pick_action():

@@ -1,7 +1,7 @@
 from rl_agents.value_functions.dqn_function import DQNFunction
-from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
-from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.service import AgentService
 from rl_agents.trainers.trainer import Trainer
+from rl_agents.utils.mode import eval_mode
 import torch
 import matplotlib.pyplot as plt
 
@@ -18,7 +18,7 @@ class DistributionalDQNFunction(DQNFunction):
             nb_atoms : int,
             v_min : float,
             v_max : float,
-            net : AbstractDeepQNeuralNetwork,
+            net : AgentService,
             gamma : float,
             trainer : Trainer = None,
             multi_steps = None,
@@ -53,12 +53,11 @@ class DistributionalDQNFunction(DQNFunction):
         done: torch.Tensor,  # [batch] obtained at t+multi_steps
         **kwargs
     ):  
-        
         batch_size = state.size(0)
-        y_pred = self.Q_a(state = state, actions = action, training= True, return_atoms= True)
+        y_pred = self.Q_a(state = state, actions = action, return_atoms= True)
 
-        with torch.no_grad():
-            p_next = self.Q(state=next_state, training= False, return_atoms= True) #[batch, nb_actions, nb_atoms]
+        with torch.no_grad() and eval_mode(self):
+            p_next = self.Q(state=next_state, return_atoms= True) #[batch, nb_actions, nb_atoms]
             q_next = self.out_to_value(p_next) # [batch, nb_actions]
             a_star = torch.argmax(q_next, dim = 1, keepdim= True) #[batch]
             p_next = p_next.gather(1, a_star.unsqueeze(-1).expand(-1, 1, self.nb_atoms)).squeeze(1) # [batch, nb_atoms]
@@ -77,18 +76,19 @@ class DistributionalDQNFunction(DQNFunction):
             m.scatter_add_(1, l, (p_next * (u.float() - b)).float())
             m.scatter_add_(1, u, (p_next * (b - l.float())).float())
             y_true = m
+
         return y_true, y_pred #both : [batch, nb_atoms]
 
-    def Q(self, state: torch.Tensor, training=False, return_atoms = False) -> torch.Tensor:
-        q_logits = self.net.forward(state, training=training)
+    def Q(self, state: torch.Tensor, return_atoms = False) -> torch.Tensor:
+        q_logits = self.net.forward(state)
         q_prob = torch.softmax(q_logits, dim=-1) #[batch/nb_env, nb_actions, nb_atoms]
         return q_prob if return_atoms else self.out_to_value(q_prob)
     
     def Q_a(
-        self, state: torch.Tensor, actions: torch.Tensor, training=False, return_atoms = False
+        self, state: torch.Tensor, actions: torch.Tensor, return_atoms = False
     ) -> torch.Tensor:
         # actions : [batch]
-        q_values = self.Q(state, training=training, return_atoms=return_atoms) #[batch/nb_env, nb_actions, nb_atoms] if return_atoms is True else [batch/nb_env, nb_actions]
+        q_values = self.Q(state, return_atoms=return_atoms) #[batch/nb_env, nb_actions, nb_atoms] if return_atoms is True else [batch/nb_env, nb_actions]
         batch_idx = torch.arange(q_values.size(0), device=q_values.device)
         return q_values[batch_idx, actions.long()]  # shape [B] ou [B, N]
     
@@ -101,12 +101,11 @@ class DistributionalDQNFunction(DQNFunction):
             print("ReplayMemory is empty.")
             return
 
-        self.eval()
         nb_actions, nb_atoms = self.policy.action_space.n, self.nb_atoms
         sum_p = torch.zeros(nb_actions, nb_atoms, device=self.device)
         seen = 0
 
-        with torch.no_grad():
+        with torch.no_grad() and eval_mode(self):
             while seen < n_samples:
                 batch_sz = min(max_batch, n_samples - seen)
                 batch = replay_memory.sample(batch_sz)

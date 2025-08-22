@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent, Mode
+from rl_agents.agent import AbstractAgent
 from rl_agents.policies.policy import AbstractPolicy
 import numpy as np
 import torch
@@ -15,10 +15,10 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
     @abstractmethod
     def epsilon_function(self, agent: AbstractAgent): ...
 
-    def pick_action(self, agent: AbstractAgent, state: torch.Tensor, training : bool):
+    def pick_action(self, agent: AbstractAgent, state: torch.Tensor):
 
-        if not training:
-            return self.policy.pick_action(agent, state, training)
+        if not self.training:
+            return self.policy.pick_action(agent, state)
         
         # state : (nb_env, ...)
         rands = torch.rand(agent.nb_env)  # shape : (nb_env,)
@@ -31,7 +31,7 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
             masked_state = state[
                 env_model_action
             ]  # shape (nb_env_selected,  state_shape ...)
-            model_actions = self.policy.pick_action(agent = agent, state = masked_state, training= True)
+            model_actions = self.policy.pick_action(agent = agent, state = masked_state)
             actions[env_model_action] = model_actions.long()
 
         if env_random_action.any():

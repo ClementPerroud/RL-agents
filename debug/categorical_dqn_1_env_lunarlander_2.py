@@ -7,7 +7,6 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
@@ -17,13 +16,14 @@ from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
 from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.trainers.trainer import Trainer
+from rl_agents.service import AgentService
 
 import torch
 import numpy as np
 import gymnasium as gym
 
 
-class DistributionalQNN(AbstractDeepQNeuralNetwork):
+class DistributionalQNN(AgentService):
     def __init__(self, nb_atoms : int, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D

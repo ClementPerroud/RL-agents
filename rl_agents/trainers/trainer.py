@@ -12,6 +12,7 @@ class Trainer(AgentService):
             loss_fn: torch.nn.modules.loss._Loss = None,
             batch_size: int = None,
         ):
+        super().__init__()
         if replay_memory is not None: self.replay_memory = replay_memory.connect(self)
         if optimizer is not None: self.optimizer = optimizer
         if loss_fn is not None:

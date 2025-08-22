@@ -12,7 +12,7 @@ class DummyPolicy(
         super().__init__()
         self.action = action
 
-    def pick_action(self, agent: AbstractAgent, state: torch.Tensor, training: bool) -> torch.Tensor:
+    def pick_action(self, agent: AbstractAgent, state: torch.Tensor) -> torch.Tensor:
         if agent.nb_env > 1:  # Return must tensor of shape [nb_env,]
             return torch.ones(state.shape[0], dtype=torch.long) * self.action
         # Else : nb_env = 1

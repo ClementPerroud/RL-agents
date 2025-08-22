@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent, Mode
+from rl_agents.agent import AbstractAgent
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.value_functions.v_function import AbstractVFunction
@@ -24,13 +24,12 @@ class PPOLoss(torch.nn.Module):
     def forward(self, agent : AbstractAgent, policy : AbstractDeepPolicy, state, action, old_action_log_likelihood, advantage, **kwargs):
         # advantage : [batch]
 
-        action_distributions = policy.action_distributions(agent=agent, state=state, training= True)
+        action_distributions = policy.action_distributions(agent=agent, state=state)
         ratio = torch.exp(
             policy.evaluate_action_log_likelihood(
                 agent=agent,
                 action_distributions=action_distributions,
                 action = action,
-                training= True
             )
             - old_action_log_likelihood
         )
@@ -88,7 +87,8 @@ class PPOAgent(
 
     
     def store(self, **kwargs):
-        assert self.training, "Cannot store any memory during eval."
+        assert self.training, "Cannot store any memory during eval. Please set your agent to TRAINING mode."
+        
         for key, value in kwargs.items():
             kwargs[key] = torch.as_tensor(value)
             if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
@@ -180,12 +180,6 @@ class PPOAgent(
             mean_loss = np.mean(losses)
             
         return mean_loss
-
-
-    @property
-    def mode(self):
-        if self.training: return Mode.TRAINING
-        return Mode.EVAL
 
 
 if __name__ == "__main__":

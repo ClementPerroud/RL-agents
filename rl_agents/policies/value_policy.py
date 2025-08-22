@@ -13,8 +13,8 @@ class ValuePolicy(
         super().__init__()
         self.q_function = q_function
 
-    def pick_action(self, agent: AbstractAgent, state: torch.Tensor, training : bool):
+    def pick_action(self, agent: AbstractAgent, state: torch.Tensor):
         return torch.argmax(
-            self.q_function.Q(state = torch.as_tensor(state), training = training), 
+            self.q_function.Q(state = torch.as_tensor(state)), 
             dim=-1
         )

@@ -25,7 +25,7 @@ class AbstractSampler(AgentService, ABC):
 
 class RandomSampler(AbstractSampler):
     def __init__(self):
-        pass
+        super().__init__()
 
     def sample(self, agent : "AbstractAgent", batch_size: int, size: int):
         batch = torch.from_numpy(np.random.choice(size, size=batch_size, replace=False))
@@ -35,6 +35,7 @@ class RandomSampler(AbstractSampler):
 class PrioritizedReplaySampler(AbstractSampler):
 
     def __init__(self, max_length: int, alpha=0.65, beta_0=0.5, duration=150_000):
+        super().__init__()
         self.max_length = int(max_length)
         self.alpha = alpha
         self.beta_0 = beta_0

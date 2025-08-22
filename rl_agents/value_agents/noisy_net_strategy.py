@@ -1,14 +1,15 @@
-from rl_agents.value_agents.double_q_net import AbstractDeepQNeuralNetwork
+from rl_agents.service import AgentService
+from rl_agents.utils.noisynet import NoisyLinear
+from rl_agents.utils.mode import train_mode
 import torch
 import torch.nn as nn
-from torchrl.modules import NoisyLinear  # requires torchrl
 
-class NoisyNetProxy(AbstractDeepQNeuralNetwork):
+class NoisyNetProxy(AgentService):
     """
     In-place wrapper: replaces all nn.Linear layers in q_net by torchrl.modules.NoisyLinear.
     Keeps device/dtype and training mode; does NOT transfer weights (fresh noisy layers).
     """
-    def __init__(self, q_net: AbstractDeepQNeuralNetwork, std_init: float = 0.1):
+    def __init__(self, q_net: AgentService, std_init: float = 0.1):
         super().__init__()
         self.q_net = q_net.connect(self)
         self.std_init = std_init

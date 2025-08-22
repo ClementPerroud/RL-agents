@@ -4,11 +4,7 @@ from rl_agents.service import AgentService
 from abc import ABC, abstractmethod
 import torch
 import numpy as np
-from enum import Enum
 
-class Mode(Enum):
-    TRAINING = 0
-    EVAL = 1
 
 class AbstractAgent(AbstractPolicy, AgentService, ABC):
     def __init__(
@@ -43,29 +39,17 @@ class AbstractAgent(AbstractPolicy, AgentService, ABC):
 
     @abstractmethod
     def train_agent(self):
-        assert self.mode.value == Mode.TRAINING.value, "Please set the agent in training mode using .train()"
+        assert self.training, "Please set the agent in training mode using .train()"
     
-    def pick_action(self, state : np.ndarray, training = None):
-        if training is None: 
-            training = self.mode.value == Mode.TRAINING.value # Make training true if the agent is setting to train
+    def pick_action(self, state : np.ndarray):
         state = torch.as_tensor(state, dtype=torch.float32)
 
         single_env_condition = self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1)
         if single_env_condition: state = state.unsqueeze(0)
 
-        action = self.policy.pick_action(agent=self, state=state, training = training)
+        action = self.policy.pick_action(agent=self, state=state)
         
         if single_env_condition: action = action.squeeze(0)
 
         self.update()
         return action.detach().numpy()
-
-    @abstractmethod
-    def train(self): ...
-
-    @abstractmethod
-    def eval(self): ...
-
-    @property
-    @abstractmethod
-    def mode(self) -> Mode: ...

@@ -1,22 +1,22 @@
 from rl_agents.agent import AbstractAgent
-from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.service import AgentService
 from copy import deepcopy
 import torch
 from typing import Callable
 
 
-class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
+class DoubleQNNProxy(AgentService):
     def __init__(
         self,
-        q_net : 'AbstractDeepQNeuralNetwork',
+        q_net : 'AgentService',
         tau: int,
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.tau = tau
-        self.q_net: AbstractDeepQNeuralNetwork = q_net
-        self.q_net_target: AbstractDeepQNeuralNetwork = deepcopy(q_net)
+        self.q_net: AgentService = q_net
+        self.q_net_target: AgentService = deepcopy(q_net)
         self.q_net_target.requires_grad_(False)
 
         self.q_net = self.q_net.connect(self)
@@ -24,10 +24,10 @@ class DoubleQNNProxy(AbstractDeepQNeuralNetwork):
 
         self._copy_weights()
 
-    def forward(self, *args, training, **kwargs):
-        if training:
-            return self.q_net.forward(*args, target=False, **kwargs)
-        return self.q_net_target.forward(*args, target=True, **kwargs)
+    def forward(self, *args, **kwargs):
+        if self.training:
+            return self.q_net.forward(*args, **kwargs)
+        return self.q_net_target.forward(*args, **kwargs)
 
     @torch.no_grad()
     def update(self, agent: AbstractAgent):

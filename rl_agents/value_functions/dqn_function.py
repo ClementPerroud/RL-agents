@@ -4,23 +4,19 @@ from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
 from rl_agents.service import AgentService
 from rl_agents.trainers.trainer import Trainer
 from rl_agents.trainers.trainable import Trainable
+from rl_agents.utils.mode import eval_mode
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.agent import AbstractAgent
 
-from abc import ABC, abstractmethod
 from typing import Callable
 import torch
-import logging
-import gymnasium as gym
-
-class AbstractDeepQNeuralNetwork(torch.nn.Module, AgentService, ABC): ...
 
     
-class DVNFunction(AbstractVFunction, torch.nn.Module):
+class DVNFunction(AbstractVFunction):
     def __init__(self,
-            net : AbstractDeepQNeuralNetwork,
+            net : AgentService,
             gamma : float,
             multi_steps = None,
             trainer : Trainer = None,
@@ -60,7 +56,7 @@ class DVNFunction(AbstractVFunction, torch.nn.Module):
     ):
         
         y_pred = self.V(state, training=True)  # [batch/nb_env]
-        with torch.no_grad():
+        with torch.no_grad() and eval_mode(self):
             y_true = reward.unsqueeze(-1) + (1 - done.float()).unsqueeze(-1) * self.gamma * self.V(next_state, training=False) # is meant to predict the end of the mathematical sequence
         return y_true, y_pred
 
@@ -108,7 +104,7 @@ class DVNFunction(AbstractVFunction, torch.nn.Module):
 
 class DQNFunction(DVNFunction, AbstractQFunction):
     def __init__(self,
-            net : AbstractDeepQNeuralNetwork,
+            net : AgentService,
             gamma : float,
             trainer : Trainer = None,
             multi_steps = None,
