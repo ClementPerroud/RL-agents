@@ -12,30 +12,16 @@ class AbstractAgent(AbstractPolicy, AgentService, ABC):
         nb_env: int,
         policy: AbstractPolicy
     ):
+        AgentService.__init__(self)
+        AbstractPolicy.__init__(self)
         self.nb_env = nb_env
-        self.policy = policy.connect(self)
+        self.policy = policy
 
         self.episode = 0
         self.step = 0
 
-    @property
-    def services(self) -> set["AgentService"]:
-        if not hasattr(self, "_services"):  # Triggered the first call
-            # Initialize services
-            self._services = set()
-            self._find_services(self)
-        return self._services
-
-    def update(self):
+    def update(self, agent : 'AbstractAgent'):
         self.step += 1
-        for element in self.services:
-            element.update(agent=self)
-
-    def _find_services(self, service: AgentService, _first: bool = True):
-        if not _first:
-            self.services.add(service)
-        for sub_service in service.sub_services:
-            self._find_services(service=sub_service, _first=False)
 
     @abstractmethod
     def train_agent(self):
@@ -51,5 +37,5 @@ class AbstractAgent(AbstractPolicy, AgentService, ABC):
         
         if single_env_condition: action = action.squeeze(0)
 
-        self.update()
+        self.__update__(agent=self)
         return action.detach().numpy()

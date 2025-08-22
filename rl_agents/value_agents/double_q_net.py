@@ -19,8 +19,8 @@ class DoubleQNNProxy(AgentService):
         self.q_net_target: AgentService = deepcopy(q_net)
         self.q_net_target.requires_grad_(False)
 
-        self.q_net = self.q_net.connect(self)
-        self.q_net_target = self.q_net_target.connect(self)
+        self.q_net = self.q_net
+        self.q_net_target = self.q_net_target
 
         self._copy_weights()
 

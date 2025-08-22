@@ -11,14 +11,11 @@ class AgentService(torch.nn.Module, ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def connect(self, parent_agent_service: "AgentService"):
-        parent_agent_service.sub_services.append(self)
-        return self
 
-    @property
-    def sub_services(self) -> list["AgentService"]:
-        if not hasattr(self, "_sub_services"):
-            self._sub_services = []
-        return self._sub_services
-
+    def __update__(self, agent: "AbstractAgent"):
+        self.update(agent=agent)
+        for element in self.children():
+            if isinstance(element, AgentService):
+                element.__update__(agent=self)
+        
     def update(self, agent: "AbstractAgent"): ...

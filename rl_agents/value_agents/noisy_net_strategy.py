@@ -11,7 +11,7 @@ class NoisyNetProxy(AgentService):
     """
     def __init__(self, q_net: AgentService, std_init: float = 0.1):
         super().__init__()
-        self.q_net = q_net.connect(self)
+        self.q_net = q_net
         self.std_init = std_init
         self._patch(self.q_net)
 

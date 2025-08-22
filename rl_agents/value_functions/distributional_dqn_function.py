@@ -56,7 +56,7 @@ class DistributionalDQNFunction(DQNFunction):
         batch_size = state.size(0)
         y_pred = self.Q_a(state = state, actions = action, return_atoms= True)
 
-        with torch.no_grad() and eval_mode(self):
+        with torch.no_grad(), eval_mode(self):
             p_next = self.Q(state=next_state, return_atoms= True) #[batch, nb_actions, nb_atoms]
             q_next = self.out_to_value(p_next) # [batch, nb_actions]
             a_star = torch.argmax(q_next, dim = 1, keepdim= True) #[batch]
@@ -105,7 +105,7 @@ class DistributionalDQNFunction(DQNFunction):
         sum_p = torch.zeros(nb_actions, nb_atoms, device=self.device)
         seen = 0
 
-        with torch.no_grad() and eval_mode(self):
+        with torch.no_grad(), eval_mode(self):
             while seen < n_samples:
                 batch_sz = min(max_batch, n_samples - seen)
                 batch = replay_memory.sample(batch_sz)

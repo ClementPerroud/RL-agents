@@ -15,7 +15,7 @@ class DQNAgent(AbstractValueAgent):
 
         torch.nn.Module.__init__(self)
         AbstractValueAgent.__init__(self, q_function=q_function, nb_env=nb_env, policy=policy)
-        self.q_function = q_function.connect(self)
+        self.q_function = q_function
         self.train_every = train_every
 
         assert isinstance(self.q_function, DQNFunction), "q_function must be from class DQNFunction, or inherit from it"

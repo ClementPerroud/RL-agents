@@ -1,4 +1,5 @@
 from rl_agents.agent import AbstractAgent
+from rl_agents.service import AgentService
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.value_functions.v_function import AbstractVFunction
@@ -6,13 +7,14 @@ from rl_agents.policies.deep_policy import AbstractDeepPolicy
 from rl_agents.replay_memory.rollout_memory import RolloutMemory
 from rl_agents.replay_memory.policy_training_memory import PPOTrainingMemory
 from rl_agents.policy_agents.advantage_function import BaseAdvantageFunction
+
 import torch
 import numpy as np
 from copy import deepcopy
 import gymnasium as gym
 import itertools    
 
-class PPOLoss(torch.nn.Module):
+class PPOLoss(AgentService):
     def __init__(self,
             epsilon : float, 
             entropy_loss_coeff : float,
@@ -40,9 +42,7 @@ class PPOLoss(torch.nn.Module):
         loss =  - ( torch.minimum(p1, p2).mean() + self.entropy_loss_coeff * entropy_loss)
         return loss
 
-class PPOAgent(
-        torch.nn.Module,
-        AbstractPolicyAgent):
+class PPOAgent(AbstractPolicyAgent):
     
     def __init__(self,
             nb_env : int,
@@ -58,8 +58,7 @@ class PPOAgent(
             values_loss_coeff : float,
 
         ):
-        torch.nn.Module.__init__(self)
-        AbstractPolicyAgent.__init__(self, nb_env = nb_env, policy = policy)
+        super().__init__(nb_env = nb_env, policy = policy)
         assert isinstance(self.policy, AbstractDeepPolicy), "policy must be a DeepPolicy."
         self.policy : AbstractDeepPolicy
 

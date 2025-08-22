@@ -23,15 +23,15 @@ class DVNFunction(AbstractVFunction):
         ):
         torch.nn.Module.__init__(self)
         Trainable.__init__(self, trainer=trainer)
-        self.net = net.connect(self)
-        self.trainer = trainer.connect(self)
+        self.net = net
+        self.trainer = trainer
         self.gamma = gamma
         if multi_steps is not None: self.gamma **= multi_steps
 
 
-    def V(self, state: torch.Tensor, training : bool) -> torch.Tensor:
+    def V(self, state: torch.Tensor) -> torch.Tensor:
         # state : [batch/nb_env, state_shape ...]
-        return self.net.forward(state, training=training)
+        return self.net.forward(state)
         # Return Q Values : [batch/nb_env]
     
 
@@ -55,9 +55,9 @@ class DVNFunction(AbstractVFunction):
         **kwargs
     ):
         
-        y_pred = self.V(state, training=True)  # [batch/nb_env]
-        with torch.no_grad() and eval_mode(self):
-            y_true = reward.unsqueeze(-1) + (1 - done.float()).unsqueeze(-1) * self.gamma * self.V(next_state, training=False) # is meant to predict the end of the mathematical sequence
+        y_pred = self.V(state)  # [batch/nb_env]
+        with torch.no_grad(), eval_mode(self):
+            y_true = reward.unsqueeze(-1) + (1 - done.float()).unsqueeze(-1) * self.gamma * self.V(next_state) # is meant to predict the end of the mathematical sequence
         return y_true, y_pred
 
     def train_service(self, agent : "AbstractAgent"):
@@ -135,11 +135,6 @@ class DQNFunction(DVNFunction, AbstractQFunction):
     ):
         y_pred = self.Q_a(state, action, training=True)  # [batch/nb_env]
 
-        with torch.no_grad():
-            y_true = reward
-            y_true += torch.where(
-                done,
-                0,
-                self.gamma * self.V(next_state, training= False),  # is meant to predict the end of the mathematical sequence
-            )
+        with torch.no_grad(), eval_mode(self):
+            y_true = reward.unsqueeze(-1) + (1 - done.float()).unsqueeze(-1) * self.gamma * self.V(next_state, training= False)  # is meant to predict the end of the mathematical sequence
         return y_true, y_pred

@@ -7,7 +7,7 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.service import AgentService
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import ValuePolicy
@@ -22,7 +22,7 @@ import numpy as np
 import gymnasium as gym
 
 
-class QNN(AbstractDeepQNeuralNetwork):
+class QNN(AgentService):
     def __init__(self, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D

@@ -21,7 +21,7 @@ class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
     def store(self, agent: "AbstractAgent", **kwargs): ...
 
     @abstractmethod
-    def sample(self, batch_size: int, training : bool): ...
+    def sample(self, batch_size: int): ...
 
     @abstractmethod
     def reset(self): ...
@@ -46,7 +46,7 @@ class BaseReplayMemory(AbstractReplayMemory):
         self.sizes = {name:(self.max_length,) + size for name, size in zip(self.names, sizes)}
         self.dtypes = {name:dtype for name, dtype in zip(self.names, dtypes)}
         self.device = device
-        self.sampler = sampler.connect(self)
+        self.sampler = sampler
         self.n = len(names)
 
         assert self.n == len(sizes) and self.n == len(

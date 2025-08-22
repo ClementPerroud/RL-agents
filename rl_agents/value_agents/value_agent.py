@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 class AbstractValueAgent(AbstractAgent, ABC):
     def __init__(self, q_function : 'AbstractQFunction', nb_env : int, policy : 'AbstractPolicy'):
         super().__init__(nb_env = nb_env, policy = policy)
-        self.q_function = q_function.connect(self)
+        self.q_function = q_function
     ...
     # @abstractmethod
     # def Q(self, state: torch.Tensor): ...

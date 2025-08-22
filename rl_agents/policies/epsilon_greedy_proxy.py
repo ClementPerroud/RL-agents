@@ -8,6 +8,7 @@ import math
 
 class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
     def __init__(self, policy : AbstractPolicy, action_space: Space):
+        super().__init__()
         self.policy = policy
         self.action_space = action_space
         self.epsilon = 1.0

@@ -7,7 +7,7 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.value_agents.deep_q_model import AbstractDeepQNeuralNetwork
+from rl_agents.service import AgentService
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
@@ -30,7 +30,7 @@ import gymnasium as gym
 from collections import deque
 
 
-class MainNet(AbstractDeepQNeuralNetwork):
+class MainNet(AgentService):
     def __init__(self, observation_space : gym.spaces.Space, hidden_dim :int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D
@@ -47,7 +47,7 @@ class MainNet(AbstractDeepQNeuralNetwork):
         
         # output : [batch, hidden_dim]
         return x
-class PolicyNet(AbstractDeepQNeuralNetwork):
+class PolicyNet(AgentService):
     def __init__(self, main_net : torch.nn.Module, hidden_dim : int, n_actions : int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D
@@ -69,8 +69,8 @@ class PolicyNet(AbstractDeepQNeuralNetwork):
 
         return self.head_mean(x), torch.clamp(self.head_std(x), min = -20, max = 2)
     
-class SequentialNet(torch.nn.Sequential, AbstractDeepQNeuralNetwork):
-    def forward(self, *args, training : bool, **kwargs):
+class SequentialNet(torch.nn.Sequential, AgentService):
+    def forward(self, *args, **kwargs):
         return super().forward(*args, **kwargs)
 
 def main():

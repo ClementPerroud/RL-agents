@@ -10,7 +10,6 @@ import gymnasium as gym
 from abc import abstractmethod
 
 class AbstractDeepPolicy(
-    torch.nn.Module,
     AbstractPolicy
     ):
     @abstractmethod

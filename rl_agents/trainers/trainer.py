@@ -13,7 +13,7 @@ class Trainer(AgentService):
             batch_size: int = None,
         ):
         super().__init__()
-        if replay_memory is not None: self.replay_memory = replay_memory.connect(self)
+        if replay_memory is not None: self.replay_memory = replay_memory
         if optimizer is not None: self.optimizer = optimizer
         if loss_fn is not None:
             self.loss_fn = loss_fn

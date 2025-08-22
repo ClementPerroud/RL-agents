@@ -17,6 +17,7 @@ class BaseAdvantageFunction(AgentService, ABC):
 
 class GAEFunction(BaseAdvantageFunction):
     def __init__(self, value_function : DVNFunction, gamma : float, lambda_ : float, multi_steps=None):
+        super().__init__()
         self.value_function = value_function
         self.lambda_ = lambda_
         self._state_tp1 = None
