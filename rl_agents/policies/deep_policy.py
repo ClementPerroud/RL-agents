@@ -49,7 +49,7 @@ class DiscreteDeepPolicy(AbstractDeepPolicy):
     def pick_action(self, agent, state : torch.Tensor)-> torch.Tensor:
         # state : [batch, state_shape ...]
         action_probabilities, = self.action_distributions(agent=agent, state=state)
-        action = torch.multinomial(input=action_probabilities, num_samples=1) # Pick the actions randomly following their given probabilities.
+        action = torch.multinomial(input=action_probabilities, num_samples=1).squeeze(-1) # Pick the actions randomly following their given probabilities.
         
         self.last_log_prob = self.evaluate_action_log_likelihood(agent=agent, action_distributions= (action_probabilities,), action=action)
         return action.squeeze(-1)
