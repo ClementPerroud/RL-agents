@@ -8,8 +8,14 @@
             "name": "Test Case : Categorical DQN",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/debug/categorical_dqn_1_env_cartpole_1.py",
-            "console": "integratedTerminal"
+            "program": "${workspaceFolder}/debug/dqn_1_env_cartpole.py",
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "Debug Unit Test",
+            "type": "python",
+            "request": "test",
+            "justMyCode": false,
         }
     ]
 }

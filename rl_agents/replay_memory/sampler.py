@@ -5,79 +5,92 @@ from rl_agents.utils.sumtree import SumTree
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
+from dataclasses import dataclass
+from functools import partial
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Callable
 
 if TYPE_CHECKING:
     from rl_agents.agent import AbstractAgent
+    from rl_agents.replay_memory.replay_memory import AbstractReplayMemory
 
 
-class AbstractSampler(AgentService, ABC):
-    @abstractmethod
-    def sample(self, agent : 'AbstractAgent', batch_size: int, size: int) -> tuple[np.ndarray, np.ndarray]: ...
-
+class AbstractSampler(AgentService, torch.utils.data.Sampler, ABC):
     def update(self, agent: "AbstractAgent"): ...
-
-    def train_callback(self, **kwargs): ...
 
     def store(self, agent: "AbstractAgent", **kwargs): ...
 
+    def get_weights_from_indices(self, indices : torch.Tensor):...
+
+    def update_experiences(self, agent : "AbstractAgent", td_errors : torch.Tensor = None, **kwargs): ...
 
 class RandomSampler(AbstractSampler):
-    def __init__(self):
+    def __init__(self, replay_memory : "AbstractReplayMemory"):
         super().__init__()
+        self.replay_memory = replay_memory
 
-    def sample(self, agent : "AbstractAgent", batch_size: int, size: int):
-        batch = torch.from_numpy(np.random.choice(size, size=batch_size, replace=False))
-        return batch, None
+    @torch.no_grad()
+    def __len__(self) -> int:
+        return len(self.replay_memory)
 
+    @torch.no_grad()
+    def __iter__(self):
+        while True:
+            n = len(self.replay_memory)
+            # with replacement is OK for off-policy
+            yield from torch.randint(0, n, (16,)).tolist()
+        
 
 class PrioritizedReplaySampler(AbstractSampler):
 
-    def __init__(self, max_length: int, alpha=0.65, beta_0=0.5, duration=150_000):
+    def __init__(self, replay_memory: "AbstractReplayMemory", alpha=0.65, beta_0=0.5, duration=150_000):
         super().__init__()
-        self.max_length = int(max_length)
+        self.replay_memory = replay_memory
         self.alpha = alpha
         self.beta_0 = beta_0
         self.duration = duration
-        self.priorities = SumTree(size=self.max_length)
-        self.last_batch = None
+        self.priorities = SumTree(size=self.replay_memory.max_length)
         self.random_sampler = RandomSampler()
+        self.step = 0
 
-    def sample(self, agent : "AbstractAgent", batch_size: int, size: int):
-
-        # if self.step < batch_size:
-        #     raise ValueError("Cannot sample batch_size")
+    @torch.no_grad()
+    def __len__(self) -> int:
+        return len(self.replay_memory)
+    
+    @torch.no_grad()
+    def __iter__(self):
+        for _ in range(len(self)):
+            if self.step >= self.duration:
+                yield from self.random_sampler.__iter__()
+            else:
+                indices = self.priorities.sample(32)
+                indices = torch.tensor(indices).long()
+                yield from indices
         
-        if agent.step >= self.duration:
-            return self.random_sampler.sample(batch_size=batch_size, size=size)
-
-        beta = min(1, self.beta_0 + (1 - self.beta_0) * agent.step / self.duration)
-
-        batch = self.priorities.sample(batch_size)
-        weights : np.ndarray= (size * self.priorities[batch] / (self.priorities.sum() + 1E-8)) ** (-beta)
+    def get_weights_from_indices(self, indices : torch.Tensor):
+        beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / self.duration)
+        weights : np.ndarray= (len(self) * self.priorities[indices] / (self.priorities.sum() + 1E-8)) ** (-beta)
         weights = weights / (weights.max() + 1E-6)
+        return weights
 
-        return torch.tensor(batch).long(), torch.from_numpy(weights)
 
-    def train_callback(self, batch : torch.Tensor, td_errors: torch.Tensor, **kwargs):
+    @torch.no_grad()
+    def update_experiences(self, agent : "AbstractAgent", indices : torch.Tensor, td_errors : torch.Tensor = None, **kwargs):
         td_errors = td_errors.abs().cpu().numpy()
-        self.priorities[batch.cpu().numpy()] = (td_errors + 1e-6) ** self.alpha
+        self.priorities[indices.cpu().numpy()] = (td_errors + 1e-6) ** self.alpha
 
     @torch.no_grad()
     def store(self, agent: "AbstractAgent", **kwargs):
         assert isinstance(
             agent, AbstractValueAgent
         ), "PrioritizedReplaySampler can only be used with QAgents"
-        state = torch.as_tensor(kwargs["state"])
-        action = torch.as_tensor(kwargs["action"])
-        reward = torch.as_tensor(kwargs["reward"])
-        next_state = torch.as_tensor(kwargs["next_state"])
-        done = torch.as_tensor(kwargs["done"])
 
-        y_true, y_pred = agent.q_function.compute_loss_inputs(
-            state=state, action=action, reward=reward, next_state=next_state, done=done
+        experience = agent.replay_memory.experience_dataclass_generator(
+            **{name : torch.as_tensor(value, dtype = agent.replay_memory.dtypes[name]) for name, value in kwargs.items()}
         )
-        td_errors = agent.q_function.compute_td_errors(y_true=y_true, y_pred=y_pred).abs().cpu().numpy()
+        loss_inputs = agent.q_function.compute_loss_inputs(experience=experience)
+
+        td_errors = agent.q_function.compute_td_errors(loss_inputs).abs().cpu().numpy()
         new_priorities = (td_errors + 1e-6) ** self.alpha 
         self.priorities.add(new_priorities)
+        self.step += 1

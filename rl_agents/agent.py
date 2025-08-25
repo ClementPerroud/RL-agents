@@ -33,9 +33,17 @@ class AbstractAgent(AbstractPolicy, AgentService, ABC):
         single_env_condition = self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1)
         if single_env_condition: state = state.unsqueeze(0)
 
-        action = self.policy.pick_action(agent=self, state=state)
+        pick_action_return = self.policy.pick_action(agent=self, state=state)
         
-        if single_env_condition: action = action.squeeze(0)
+        if single_env_condition: 
+            if isinstance(pick_action_return, torch.Tensor): pick_action_return = pick_action_return.squeeze(0)
+            if isinstance(pick_action_return, tuple):
+                pick_action_return = (elem.squeeze(0) for elem in pick_action_return)
+            else: ValueError("Pick action must be a Tensor or a tuple of Tensor")
+
+        if isinstance(pick_action_return, torch.Tensor): pick_action_return = pick_action_return.detach().numpy()
+        if isinstance(pick_action_return, tuple): pick_action_return = (elem.detach().numpy() for elem in pick_action_return)
+        else: ValueError("Pick action must be a Tensor or a tuple of Tensor")
 
         self.__update__(agent=self)
-        return action.detach().numpy()
+        return pick_action_return

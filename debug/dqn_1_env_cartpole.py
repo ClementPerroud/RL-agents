@@ -55,8 +55,11 @@ def main():
         multi_step= 3,
         gamma= gamma,
         max_length = memory_size,
-        sampler= PrioritizedReplaySampler(max_length=memory_size, duration= 100_000),
         observation_space= observation_space)
+    sampler= RandomSampler(
+        replay_memory=replay_memory
+    )
+    # sampler= PrioritizedReplaySampler(replay_memory=replay_memory, batch_size = 64, duration= 100_000),
 
     q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
@@ -66,12 +69,7 @@ def main():
     q_function = DQNFunction(
         net= q_net,
         gamma= gamma ** replay_memory.multi_step,
-        trainer= Trainer(
-            replay_memory=replay_memory,
-            loss_fn= torch.nn.MSELoss(),
-            optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
-            batch_size=64
-        ),
+        loss_fn= torch.nn.MSELoss(),
     )
     policy = EspilonGreedyPolicy(
         q = 1 - 4E-4,
@@ -84,7 +82,11 @@ def main():
         nb_env= nb_env,
         policy= policy,
         train_every= 1,
-        q_function= q_function
+        q_function= q_function,
+        replay_memory=replay_memory,
+        sampler=sampler,
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        batch_size=64
     )
 
     episodes = 1000
@@ -102,7 +104,6 @@ def main():
             next_state, reward, done, truncated, infos = env.step(action = int(action))
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
-            done = done or truncated
 
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()

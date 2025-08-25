@@ -10,7 +10,7 @@ if __name__ == "__main__":
 from rl_agents.service import AgentService
 from rl_agents.trainers.trainer import Trainer
 
-from rl_agents.policy_agents.ppo_agent import PPOAgent, PPOLoss
+from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
 from rl_agents.policies.deep_policy import DiscreteDeepPolicy
 from rl_agents.value_functions.dqn_function import DVNFunction
 from rl_agents.policy_agents.advantage_function import GAEFunction
@@ -74,10 +74,9 @@ def main():
     value_function = DVNFunction(net = value_net, gamma= gamma, trainer= Trainer(loss_fn=torch.nn.MSELoss()))
     advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
     policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.01)
-    agent = PPOAgent(
+    agent = A2CAgent(
         nb_env=nb_env,
         policy=policy,
-        value_function=value_function,
         advantage_function=advantage_function,
         policy_loss=policy_loss,
         rollout_period= 2048,
@@ -100,13 +99,11 @@ def main():
         state, infos = env.reset()
         
         while not truncated and not done:
-            action = agent.pick_action(state= state)
+            action, log_prob = agent.pick_action(state= state)
             next_state, reward, done, truncated, infos = env.step(action = int(action))
             episode_rewards += reward
-            # print(state, action, reward, next_state, done, truncated)
-            done = done or truncated
 
-            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated = truncated)
+            agent.store(state=state, action=action, reward=reward, next_state=next_state, done=done, truncated=truncated, log_prob=log_prob)
             loss = agent.train_agent()
 
             if loss is not None: episode_losses.append(loss)

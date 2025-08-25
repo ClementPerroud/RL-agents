@@ -15,29 +15,19 @@ class RolloutMemory(BaseReplayMemory):
     ):
         assert isinstance(
             observation_space, Box
-        ), "ReplayMemory only supports gymnasium.spaces.Box as observation_space"
+        ), "RolloutMemory only supports gymnasium.spaces.Box as observation_space"
         self.observation_space = observation_space
 
         super().__init__(
             max_length=max_length,
-            names=["state", "action", "next_state", "reward",  "done", "truncated", "old_action_log_likelihood"],
-            sizes=[
-                self.observation_space.shape,
-                action_space.shape,
-                self.observation_space.shape,
-                (),
-                (),
-                (),
-                (),
-            ],
-            dtypes=[
-                torch.float32,
-                torch.float32,
-                torch.float32,
-                torch.float32,
-                torch.bool,
-                torch.bool,
-                torch.float32,
+            fields=[
+                ("state",        observation_space.shape, torch.float32),
+                ("action",       action_space.shape,      torch.float32),
+                ("next_state",   observation_space.shape, torch.float32),
+                ("reward",       (),                      torch.float32),
+                ("done",         (),                      torch.bool),
+                ("truncated",    (),                      torch.bool),
+                ("log_prob", (),                      torch.float32),
             ],
             sampler=sampler,
             device=device,

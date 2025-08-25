@@ -7,6 +7,6 @@ from typing import Callable
 import torch
 
 
-class AbstractVFunction(AgentService, Trainable, ABC):
+class AbstractVFunction(AgentService, ABC):
     @abstractmethod
     def V(self, state: torch.Tensor, training : bool) -> torch.Tensor: ...

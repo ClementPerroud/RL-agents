@@ -7,6 +7,7 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
+from rl_agents.service import AgentService
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
@@ -16,7 +17,6 @@ from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
 from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.trainers.trainer import Trainer
-from rl_agents.service import AgentService
 
 import torch
 import numpy as np
@@ -57,42 +57,43 @@ def main():
     multi_step = 3
     replay_memory = MultiStepReplayMemory(
         max_length = memory_size,
-        nb_env= nb_env,
-        gamma = gamma,
-        multi_step= multi_step,
+        nb_env=nb_env,
+        gamma=gamma,
+        multi_step=multi_step,
         sampler= RandomSampler(),
         observation_space= observation_space
     )
+
 
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
         tau= 20
     )
-    q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
+    # q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
     q_function = DistributionalDQNFunction(
         nb_atoms=nb_atoms, v_min=v_min, v_max=v_max,
         net= q_net,
-        gamma = gamma ** multi_step,
-        trainer= Trainer(
-            replay_memory=replay_memory,
-            loss_fn= DistributionalLoss(),
-            optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
-            batch_size=64
-        ),
+        gamma = gamma,
+        multi_steps= multi_step,
+        loss_fn= DistributionalLoss(),
     )
     policy = ValuePolicy(q_function=q_function)
-    # policy = EspilonGreedyPolicy(
-    #     q = 1 - 1E-4,
-    #     start_epsilon= 0.9,
-    #     end_epsilon= 0.01,
-    #     action_space= action_space
-    # )
+    policy = EspilonGreedyPolicy(
+        q = 1 - 1E-4,
+        start_epsilon= 0.9,
+        end_epsilon= 0.01,
+        action_space= action_space,
+        policy=policy,
+    )
     agent = DQNAgent(
         nb_env= nb_env,
         policy= policy,
         q_function= q_function,
         train_every= 3,
+        replay_memory=replay_memory,
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        batch_size=64
     )
 
     episodes = 1000
@@ -119,13 +120,14 @@ def main():
             
             episode_steps += 1
             state = next_state
-
+        
+        epsilon = policy.epsilon
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
         # print(episode_losses)
 
-        if i >= 150:
-            agent.plot_atoms_distributions()
+        # if i >= 150:
+        #     agent.plot_atoms_distributions()
 
 if __name__ == "__main__":
     import sys

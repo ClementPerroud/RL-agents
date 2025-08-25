@@ -76,7 +76,7 @@ class SequentialNet(torch.nn.Sequential, AgentService):
 def main():
     nb_env = 1
     gamma = 0.99
-    lambda_ = 0.95
+    lamb = 0.95
     hidden_dim = 64
     epsilon = 0.2
 
@@ -102,7 +102,7 @@ def main():
         action_space= action_space
     )
     value_function = DVNFunction(net = value_net, gamma= gamma, trainer= Trainer(loss_fn=torch.nn.MSELoss()))
-    advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lambda_=lambda_)
+    advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
     policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.005)
     agent = PPOAgent(
         nb_env=nb_env,

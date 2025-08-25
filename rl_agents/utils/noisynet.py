@@ -9,7 +9,6 @@ from typing import Sequence
 
 import torch
 from torch import nn
-from torchrl.data.utils import DEVICE_TYPING
 
 
 class NoisyLinear(nn.Linear):
@@ -42,7 +41,7 @@ class NoisyLinear(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        device: DEVICE_TYPING | None = None,
+        device: None = None,
         dtype: torch.dtype | None = None,
         std_init: float = 0.1,
     ):

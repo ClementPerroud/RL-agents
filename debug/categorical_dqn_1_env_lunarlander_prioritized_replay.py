@@ -60,8 +60,7 @@ def main():
         nb_env=nb_env,
         gamma=gamma,
         multi_step=multi_step,
-        # sampler= PrioritizedReplaySampler(alpha = 0.6, max_length=memory_size, duration= 100_000),
-        sampler= RandomSampler(),
+        sampler= PrioritizedReplaySampler(alpha = 0.6, max_length=memory_size, duration= 100_000),
         observation_space= observation_space
     )
 
@@ -77,12 +76,7 @@ def main():
         net= q_net,
         gamma = gamma,
         multi_steps= multi_step,
-        trainer= Trainer(
-            replay_memory=replay_memory,
-            loss_fn= DistributionalLoss(),
-            optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
-            batch_size=64
-        ),
+        loss_fn= DistributionalLoss(),
     )
     policy = ValuePolicy(q_function=q_function)
     policy = EspilonGreedyPolicy(
@@ -97,6 +91,9 @@ def main():
         policy= policy,
         q_function= q_function,
         train_every= 3,
+        replay_memory=replay_memory,
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        batch_size=64
     )
 
     episodes = 1000

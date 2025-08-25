@@ -20,7 +20,7 @@ class Trainer(AgentService):
             self.loss_fn.reduction = "none"
         if batch_size is not None:self.batch_size = batch_size
 
-    def apply_weight(self, loss : torch.Tensor, weight : torch.Tensor | float |None):
+    def _apply_weights(self, loss : torch.Tensor, weight : torch.Tensor | float |None):
         # Handle weights
         if weight is not None:
             weight = torch.as_tensor(weight, dtype=torch.float32)

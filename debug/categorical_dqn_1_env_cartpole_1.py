@@ -55,7 +55,6 @@ def main():
     gamma = 0.99
     replay_memory = ReplayMemory(
         max_length = memory_size,
-        sampler= RandomSampler(),
         # sampler= PrioritizedReplaySampler(length=memory_size, duration= 20_000),
         observation_space= observation_space)
 
@@ -67,12 +66,7 @@ def main():
     q_function = DistributionalDQNFunction(
         nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,
         net=q_net,
-        trainer= Trainer(
-            replay_memory=replay_memory,
-            loss_fn= DistributionalLoss(),
-            optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
-            batch_size=64
-        ),
+        loss_fn= DistributionalLoss(),
         gamma = gamma
         )
     policy = EspilonGreedyPolicy(
@@ -87,6 +81,10 @@ def main():
         policy= policy,
         q_function= q_function,
         train_every= 1,
+        replay_memory=replay_memory,
+        sampler= RandomSampler(),
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        batch_size=64
     )
 
     episodes = 1000

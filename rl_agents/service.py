@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 class AgentService(torch.nn.Module, ABC):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        torch.nn.Module.__init__(self, *args, **kwargs)
 
 
     def __update__(self, agent: "AbstractAgent"):

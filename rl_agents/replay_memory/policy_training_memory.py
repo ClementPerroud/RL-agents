@@ -20,7 +20,7 @@ class PPOTrainingMemory(BaseReplayMemory):
 
         super().__init__(
             max_length=max_length,
-            names=["state", "action", "next_state", "reward", "done", "truncated", "old_action_log_likelihood", "advantage"],
+            names=["state", "action", "next_state", "reward", "done", "truncated", "log_prob", "advantage"],
             sizes=[
                 self.observation_space.shape,
                 action_space.shape,
