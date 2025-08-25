@@ -23,6 +23,7 @@ class DVNFunction(AbstractVFunction):
         self.net = net
         self.gamma = gamma
         self.loss_fn = loss_fn
+        loss_fn.reduction= "none"
         if multi_steps is not None: self.gamma **= multi_steps
 
 

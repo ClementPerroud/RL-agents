@@ -45,6 +45,7 @@ class DQNAgent(AbstractValueAgent):
             if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
         
         self.replay_memory.store(agent=self, **kwargs)
+        self.sampler.store(agent=self, **kwargs)
 
 
     def train_step_from_dataloader(self):
@@ -53,13 +54,15 @@ class DQNAgent(AbstractValueAgent):
         except StopIteration:
             self._dataloader_iter = iter(self.dataloader)
             experience = next(self._dataloader_iter)
+        
         self.optimizer.zero_grad()
+
         q_loss = self.q_function.get_loss(agent=self, experience=experience)
-        q_loss = self._apply_weights(q_loss, self.sampler.get_weights_from_indices(experience.indices))
+        q_loss = self._apply_weights(q_loss, self.sampler.compute_weights_from_indices(experience.indices))
 
         q_loss = q_loss.mean()
         q_loss.backward()
-        torch.nn.utils.clip_grad_value_(self.q_function.parameters(), 10)
+
         self.optimizer.step()
 
         return q_loss.item()

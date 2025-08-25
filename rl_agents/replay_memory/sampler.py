@@ -20,9 +20,9 @@ class AbstractSampler(AgentService, torch.utils.data.Sampler, ABC):
 
     def store(self, agent: "AbstractAgent", **kwargs): ...
 
-    def get_weights_from_indices(self, indices : torch.Tensor):...
+    def compute_weights_from_indices(self, indices : torch.Tensor):...
 
-    def update_experiences(self, agent : "AbstractAgent", td_errors : torch.Tensor = None, **kwargs): ...
+    def update_experiences(self, agent : "AbstractAgent", **kwargs): ...
 
 class RandomSampler(AbstractSampler):
     def __init__(self, replay_memory : "AbstractReplayMemory"):
@@ -50,7 +50,7 @@ class PrioritizedReplaySampler(AbstractSampler):
         self.beta_0 = beta_0
         self.duration = duration
         self.priorities = SumTree(size=self.replay_memory.max_length)
-        self.random_sampler = RandomSampler()
+        self.random_sampler = RandomSampler(replay_memory=self.replay_memory)
         self.step = 0
 
     @torch.no_grad()
@@ -63,11 +63,11 @@ class PrioritizedReplaySampler(AbstractSampler):
             if self.step >= self.duration:
                 yield from self.random_sampler.__iter__()
             else:
-                indices = self.priorities.sample(32)
+                indices = self.priorities.sample(16)
                 indices = torch.tensor(indices).long()
                 yield from indices
         
-    def get_weights_from_indices(self, indices : torch.Tensor):
+    def compute_weights_from_indices(self, indices : torch.Tensor):
         beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / self.duration)
         weights : np.ndarray= (len(self) * self.priorities[indices] / (self.priorities.sum() + 1E-8)) ** (-beta)
         weights = weights / (weights.max() + 1E-6)

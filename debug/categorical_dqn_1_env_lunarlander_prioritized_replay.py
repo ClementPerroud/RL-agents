@@ -60,9 +60,9 @@ def main():
         nb_env=nb_env,
         gamma=gamma,
         multi_step=multi_step,
-        sampler= PrioritizedReplaySampler(alpha = 0.6, max_length=memory_size, duration= 100_000),
         observation_space= observation_space
     )
+    sampler= PrioritizedReplaySampler(replay_memory=replay_memory, alpha = 0.6, duration= 100_000)
 
 
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
@@ -90,6 +90,7 @@ def main():
         nb_env= nb_env,
         policy= policy,
         q_function= q_function,
+        sampler=sampler,
         train_every= 3,
         replay_memory=replay_memory,
         optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),

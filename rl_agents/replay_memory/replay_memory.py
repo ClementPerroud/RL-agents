@@ -42,7 +42,7 @@ class Experience:
         # Called only if attribute not found normally
         raise AttributeError(
             f"'The exprience {type(self).__name__}' has no attribute '{item}'. Please add it the replay_memory"
-            f"Available attributes: {list(vars(self).keys())}"
+            f"Available attributes: {[field.name for field in fields(self)]}"
         )
 
 @dataclass(kw_only=True, slots=True)
@@ -270,44 +270,33 @@ class MultiStepReplayMemory(BaseReplayMemory):
         -> retourne un dict prêt pour super().store(**transition)
         """
         # Empile récompenses pour un produit scalaire vectoriel
-        r = torch.stack([t["reward"] for t in buf])  # (L,)
+        r = torch.stack([e.reward for e in buf])  # (L,)
         R = torch.dot(self._gammas[: len(r)], r)  # scalaire  γ^k * r_k
 
         return dict(
-            state=buf[0]["state"][None, ...],
-            action=buf[0]["action"][None, ...],
-            next_state=buf[-1]["next_state"][None, ...],
+            state=buf[0].state[None, ...],
+            action=buf[0].action[None, ...],
+            next_state=buf[-1].next_state[None, ...],
             reward=R[None, ...],
-            done=buf[-1]["done"][None, ...],
-            truncated=buf[-1]["truncated"][None, ...],
+            done=buf[-1].done[None, ...],
+            truncated=buf[-1].truncated[None, ...],
         )
+
 
     # ---- API publique ----------------------------------------------
     @torch.no_grad()
-    def store(self,  agent: "AbstractAgent", *, state, action, next_state, reward, done, truncated):
+    def store(self,  agent: "AbstractAgent", **kwargs):
         """
         `state`, `action`, … : tenseurs dont la 0-ème dim = nb_env.
         """
-        state =torch.as_tensor(state, dtype=self.dtypes["state"])
-        action = torch.as_tensor(action, dtype=self.dtypes["action"])
-        next_state = torch.as_tensor(next_state, dtype=self.dtypes["next_state"])
-        reward = torch.as_tensor(reward, dtype=self.dtypes["reward"])
-        done = torch.as_tensor(done, dtype=self.dtypes["done"])
-        truncated = torch.as_tensor(truncated, dtype=self.dtypes["truncated"])
         
         # Boucle fine sur les envs ; la plupart du temps nb_env <= 16, négligeable.
         for env_id in range(self.nb_env):
+            kwargs_env = {key : val[env_id] for key, val in kwargs.items()}
+            experience_env = self.__get_experience_from_values__(**kwargs_env)
+
             buf = self.buffers[env_id]
-            buf.append(
-                {
-                    "state":state[env_id],
-                    "action":action[env_id],
-                    "next_state":next_state[env_id],
-                    "reward":reward[env_id],
-                    "done":done[env_id],
-                    "truncated":truncated[env_id]
-                } # We use tensor[env_id:env_id+1] to select the one elem corresponding 
-            )
+            buf.append(experience_env) # We use tensor[env_id:env_id+1] to select the one elem corresponding 
 
             # fenêtre pleine : pousse une transition n-step
             if len(buf) == self.multi_step:
@@ -315,7 +304,7 @@ class MultiStepReplayMemory(BaseReplayMemory):
                 buf.popleft()  # fenêtre glissante
 
             # fin d'épisode : flush des restes
-            if done[env_id] or truncated[env_id]:
+            if experience_env.done or experience_env.truncated:
                 while buf:
                     super().store(agent=agent, **self._aggregate(buf))
                     buf.popleft()

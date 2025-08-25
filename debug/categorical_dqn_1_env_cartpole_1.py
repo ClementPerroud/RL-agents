@@ -82,7 +82,7 @@ def main():
         q_function= q_function,
         train_every= 1,
         replay_memory=replay_memory,
-        sampler= RandomSampler(),
+        sampler= RandomSampler(replay_memory=replay_memory),
         optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
         batch_size=64
     )

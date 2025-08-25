@@ -49,13 +49,15 @@ def main():
     nb_env = 1
     memory_size = 1E5
     gamma = 0.99
+    multi_step = 3
 
     replay_memory = MultiStepReplayMemory(
-        nb_env= nb_env,
-        multi_step= 3,
-        gamma= gamma,
         max_length = memory_size,
-        observation_space= observation_space)
+        multi_step=multi_step,
+        nb_env=nb_env,
+        gamma=gamma,
+        observation_space= observation_space
+    )
     sampler= RandomSampler(
         replay_memory=replay_memory
     )
@@ -64,12 +66,13 @@ def main():
     q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 50
+        tau= 20
     )
     q_function = DQNFunction(
         net= q_net,
-        gamma= gamma ** replay_memory.multi_step,
+        gamma= gamma,
         loss_fn= torch.nn.MSELoss(),
+        multi_steps=multi_step
     )
     policy = EspilonGreedyPolicy(
         q = 1 - 4E-4,
@@ -85,10 +88,10 @@ def main():
         q_function= q_function,
         replay_memory=replay_memory,
         sampler=sampler,
-        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        optimizer= torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
         batch_size=64
     )
-
+    agent.train()
     episodes = 1000
     for i in range(episodes):
         episode_rewards = 0

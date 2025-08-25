@@ -65,9 +65,9 @@ def main():
         nb_env= nb_env,
         gamma = gamma,
         multi_step= multi_step,
-        sampler= RandomSampler(),
         observation_space= observation_space,
     )
+    sampler= RandomSampler(replay_memory=replay_memory)
 
 
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
@@ -99,6 +99,7 @@ def main():
         q_function=q_function,
         optimizer=torch.optim.AdamW(q_net.parameters(), lr= 1E-3, amsgrad= True),
         replay_memory= replay_memory,
+        sampler=sampler,
         batch_size= 128,
     )
 

@@ -67,13 +67,14 @@ def main():
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 20
+        tau= 50
     )
     q_net = NoisyNetProxy(q_net=q_net, std_init= 0.1)
     q_function = DistributionalDQNFunction(
         nb_atoms=nb_atoms, v_min=v_min, v_max=v_max,
         net= q_net,
-        gamma = gamma ** multi_step,
+        gamma = gamma,
+        multi_steps=multi_step,
         loss_fn= DistributionalLoss(),
     )
     policy = ValuePolicy(q_function=q_function)
@@ -93,7 +94,7 @@ def main():
         optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
         batch_size=64
     )
-
+    agent.train()
     episodes = 1000
     for i in range(episodes):
         episode_rewards = 0
