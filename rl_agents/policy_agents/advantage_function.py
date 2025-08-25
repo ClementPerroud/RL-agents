@@ -3,28 +3,18 @@ from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.agent import AbstractAgent
 from rl_agents.service import AgentService
 from rl_agents.replay_memory.replay_memory import ExperienceSample
+from rl_agents.utils.collates import do_nothing_collate
 import warnings
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict
 import torch
-from torch.utils.data._utils.collate import default_collate
 
 class BaseAdvantageFunction(AgentService, ABC):    
     @abstractmethod
     def compute(self):
         ...
 
-def collate_experiences(batch):
-    """
-    batch: List[Experience]
-    Returns a dict of batched tensors (or whatever you prefer).
-    """
-    # convert each dataclass to a dict
-    dicts = [asdict(b) for b in batch]
-    # now use default_collate per key
-    keys = dicts[0].keys()
-    return {k: default_collate([d[k] for d in dicts]) for k in keys}
 
 class ReverseDatasetProxy(torch.utils.data.Dataset):
     def __init__(self, dataset : torch.utils.data.Dataset):
@@ -33,6 +23,7 @@ class ReverseDatasetProxy(torch.utils.data.Dataset):
 
     def __len__(self): return self.dataset.__len__()
     def __getitem__(self, loc): return self.dataset[self.__len__() - loc - 1]
+    def __getitems__(self, loc): return self.dataset[self.__len__() - torch.as_tensor(loc).long() - 1]
 
 class GAEFunction(BaseAdvantageFunction):
     def __init__(self, value_function : DVNFunction, gamma : float, lamb : float, multi_steps=None):
@@ -49,13 +40,7 @@ class GAEFunction(BaseAdvantageFunction):
         # truncated: torch.Tensor,  # [B] obtained at t+multi_steps
         # advantage_tp1 : torch.Tensor, # [B]
 
-        y_pred, y_true = self.value_function.compute_loss_inputs(
-            state=experience.state,
-            action=experience.action,
-            reward=experience.reward,
-            next_state=experience.next_state,
-            done=experience.done
-        )    
+        y_pred, y_true = self.value_function.compute_loss_inputs(experience=experience)    
         delta = self.value_function.out_to_value(y_true) - self.value_function.out_to_value(y_pred)
 
         end = experience.done | experience.truncated
@@ -75,7 +60,7 @@ class GAEFunction(BaseAdvantageFunction):
             dataset=ReverseDatasetProxy(dataset=agent.rollout_memory), # Reserving the dataset so we go through the data backwards.
             batch_size = agent.nb_env,
             shuffle= False, in_order=True,
-            collate_fn=collate_experiences
+            collate_fn=do_nothing_collate
         )
 
         advantage = torch.zeros(size=(agent.nb_env,))

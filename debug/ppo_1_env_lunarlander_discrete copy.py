@@ -71,7 +71,7 @@ def main():
     policy = DiscreteDeepPolicy(
         policy_net= policy_net
     )
-    value_function = DVNFunction(net = value_net, gamma= gamma, trainer= Trainer(loss_fn=torch.nn.MSELoss()))
+    value_function = DVNFunction(net = value_net, gamma= gamma, loss_fn=torch.nn.MSELoss())
     advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
     policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.01)
     agent = A2CAgent(
@@ -80,7 +80,7 @@ def main():
         advantage_function=advantage_function,
         policy_loss=policy_loss,
         rollout_period= 2048,
-        epoch_per_rollout=4,
+        epoch_per_rollout=8,
         batch_size=64,
         observation_space=observation_space,
         action_space=action_space,

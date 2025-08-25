@@ -2,11 +2,13 @@ from rl_agents.agent import AbstractAgent
 from rl_agents.service import AgentService
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.replay_memory.sampler import RandomSampler
 from rl_agents.value_functions.v_function import AbstractVFunction
 from rl_agents.policies.deep_policy import AbstractDeepPolicy
 from rl_agents.replay_memory.rollout_memory import RolloutMemory
 from rl_agents.replay_memory.policy_training_memory import PPOTrainingMemory
 from rl_agents.policy_agents.advantage_function import BaseAdvantageFunction
+from rl_agents.utils.collates import do_nothing_collate
 
 import torch
 import numpy as np
@@ -112,22 +114,27 @@ class A2CAgent(AbstractPolicyAgent):
             advantages = self.rollout_memory["advantage"]
             self.rollout_memory["advantage"] = (advantages - torch.mean(advantages))/(torch.std(advantages) + 1E-8)
 
-            data_loader = torch.utils.data.DataLoader(self.training_memory,  batch_size=self.batch_size, shuffle=True, drop_last=False)
+            data_loader = torch.utils.data.DataLoader(
+                dataset=self.rollout_memory,
+                batch_size=self.batch_size,
+                shuffle=True, drop_last=False,
+                collate_fn=do_nothing_collate,
+            )
             losses = []
             for i in range(self.epoch_per_rollout):
                 for experience in data_loader:
                     self.optimizer.zero_grad()
 
-                    policy_loss = self.policy_loss(experience = experience)
-                    value_loss =  self.value_function.trainer.loss_fn(
-                        *self.value_function.compute_loss_inputs(experience=experience)
+                    policy_loss = self.policy_loss(agent = self, policy = self.policy, experience = experience)
+                    value_loss =  self.advantage_function.value_function.loss_fn(
+                        *self.advantage_function.value_function.compute_loss_inputs(experience=experience)
                     ).mean()
                     
                     loss = policy_loss + self.values_loss_coeff* value_loss
 
                     loss.backward()
-                    # torch.nn.utils.clip_grad_value_(parameters=self.policy.policy_net.parameters(), clip_value= 1.)
-                    # torch.nn.utils.clip_grad_value_(parameters=self.value_function.net.parameters(), clip_value= 1.)
+                    # torch.nn.utils.clip_grad_value_(parameters=self.policy.policy_net.parameters(), clip_value= 10.)
+                    # torch.nn.utils.clip_grad_value_(parameters=self.advantage_function.value_function.parameters(), clip_value= 10.)
                     self.optimizer.step()
                     losses.append(loss.item())
             

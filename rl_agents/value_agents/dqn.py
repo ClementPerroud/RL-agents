@@ -3,6 +3,7 @@ from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.value_agents.value_agent import AbstractValueAgent
 from rl_agents.replay_memory.replay_memory import BaseReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler
+from rl_agents.utils.collates import do_nothing_collate
 import torch
 
 
@@ -28,8 +29,12 @@ class DQNAgent(AbstractValueAgent):
         self.batch_size = batch_size
         self.optimizer = optimizer
 
-        def collate_fn(data): return data
-        self.dataloader = torch.utils.data.DataLoader(dataset=self.replay_memory, sampler=self.sampler, collate_fn=collate_fn, batch_size=batch_size)
+        self.dataloader = torch.utils.data.DataLoader(
+            dataset=self.replay_memory, 
+            sampler=self.sampler, 
+            collate_fn=do_nothing_collate, 
+            batch_size=batch_size
+        )
         self._dataloader_iter = iter(self.dataloader)
         assert isinstance(self.q_function, DQNFunction), "q_function must be from class DQNFunction, or inherit from it"
 

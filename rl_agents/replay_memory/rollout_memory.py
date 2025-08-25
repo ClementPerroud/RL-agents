@@ -10,7 +10,6 @@ class RolloutMemory(BaseReplayMemory):
         max_length: int,
         observation_space: Space,
         action_space: Space,
-        sampler: AbstractSampler = RandomSampler(),
         device: torch.DeviceObjType = None,
     ):
         assert isinstance(
@@ -29,6 +28,5 @@ class RolloutMemory(BaseReplayMemory):
                 ("truncated",    (),                      torch.bool),
                 ("log_prob", (),                      torch.float32),
             ],
-            sampler=sampler,
             device=device,
         )

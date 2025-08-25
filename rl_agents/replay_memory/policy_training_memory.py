@@ -10,7 +10,6 @@ class PPOTrainingMemory(BaseReplayMemory):
         max_length: int,
         observation_space: Space,
         action_space: Space,
-        sampler: AbstractSampler = RandomSampler(),
         device: torch.DeviceObjType = None,
     ):
         assert isinstance(
@@ -41,6 +40,5 @@ class PPOTrainingMemory(BaseReplayMemory):
                 torch.float32,
                 torch.float32,
             ],
-            sampler=sampler,
             device=device,
         )

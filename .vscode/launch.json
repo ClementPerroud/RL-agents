@@ -12,10 +12,19 @@
             "console": "integratedTerminal",
         },
         {
+            "name": "Test Case : PPO Discrete",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/debug/ppo_1_env_lunarlander_discrete copy.py",
+            "console": "integratedTerminal",
+        },
+        {
             "name": "Debug Unit Test",
-            "type": "python",
-            "request": "test",
+            "type": "debugpy",
+            "request": "launch",
             "justMyCode": false,
+            "program": "${workspaceFolder}/debug/ppo_1_env_lunarlander_discrete copy.py",
+            "console": "integratedTerminal",
         }
     ]
 }

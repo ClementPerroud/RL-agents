@@ -19,6 +19,8 @@ lib/
 lib64/
 parts/
 sdist/
+.vscode/
+.claude/
 var/
 wheels/
 share/python-wheels/
