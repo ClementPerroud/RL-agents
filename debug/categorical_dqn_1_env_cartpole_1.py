@@ -14,7 +14,7 @@ from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayM
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
-from rl_agents.policies.value_policy import ValuePolicy
+from rl_agents.policies.value_policy import QValuePolicy
 from rl_agents.trainers.trainer import Trainer
 
 import torch
@@ -55,13 +55,12 @@ def main():
     gamma = 0.99
     replay_memory = ReplayMemory(
         max_length = memory_size,
-        # sampler= PrioritizedReplaySampler(length=memory_size, duration= 20_000),
         observation_space= observation_space)
 
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 50
+        tau= 1/50
     )
     q_function = DistributionalDQNFunction(
         nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,
@@ -74,7 +73,7 @@ def main():
         start_epsilon= 0.9,
         end_epsilon= 0.01,
         action_space= action_space,
-        policy= ValuePolicy(q_function=q_function)
+        policy= QValuePolicy(q_function=q_function)
     )
     agent = DQNAgent(
         nb_env= nb_env,

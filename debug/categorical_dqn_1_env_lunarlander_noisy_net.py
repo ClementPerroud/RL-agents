@@ -14,7 +14,7 @@ from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSamp
 from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
 from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
-from rl_agents.policies.value_policy import ValuePolicy
+from rl_agents.policies.value_policy import QValuePolicy
 from rl_agents.trainers.trainer import Trainer
 from rl_agents.service import AgentService
 
@@ -67,17 +67,16 @@ def main():
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 50
+        tau= 1/50
     )
     q_net = NoisyNetProxy(q_net=q_net, std_init= 0.1)
     q_function = DistributionalDQNFunction(
         nb_atoms=nb_atoms, v_min=v_min, v_max=v_max,
         net= q_net,
         gamma = gamma,
-        multi_steps=multi_step,
         loss_fn= DistributionalLoss(),
     )
-    policy = ValuePolicy(q_function=q_function)
+    policy = QValuePolicy(q_function=q_function)
     # policy = EspilonGreedyPolicy(
     #     q = 1 - 1E-4,
     #     start_epsilon= 0.9,
@@ -91,7 +90,7 @@ def main():
         train_every= 3,
         replay_memory=replay_memory,
         sampler=sampler,
-        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
+        optimizer= torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
         batch_size=64
     )
     agent.train()

@@ -16,57 +16,64 @@ class BaseAdvantageFunction(AgentService, ABC):
         ...
 
 
-class ReverseDatasetProxy(torch.utils.data.Dataset):
-    def __init__(self, dataset : torch.utils.data.Dataset):
+class BackwardDatasetProxy(torch.utils.data.Dataset):
+    """Proxy to iterate through dataset in reverse order for GAE computation"""
+    
+    def __init__(self, dataset: torch.utils.data.Dataset):
         super().__init__()
         self.dataset = dataset
-
-    def __len__(self): return self.dataset.__len__()
-    def __getitem__(self, loc): return self.dataset[self.__len__() - loc - 1]
-    def __getitems__(self, loc): return self.dataset[self.__len__() - torch.as_tensor(loc).long() - 1]
+    
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, loc):
+        return self.dataset[len(self) - loc - 1]
+    
+    def __getitems__(self, loc):
+        return self.dataset[len(self) - torch.as_tensor(loc).long() - 1]
 
 class GAEFunction(BaseAdvantageFunction):
-    def __init__(self, value_function : DVNFunction, gamma : float, lamb : float, multi_steps=None):
+    def __init__(self, value_function: DVNFunction, gamma: float, lamb: float, multi_steps=None):
         super().__init__()
         self.value_function = value_function
+        self.gamma = gamma
         self.lamb = lamb
 
-    def _gae(self, experience : ExperienceSample, advantage_tp1 : torch.Tensor) -> torch.Tensor:
-        # state: torch.Tensor,  # [B, state_shape ...] obtained at t
-        # action: torch.Tensor,  # [B] obtained at t+multi_steps
-        # reward: torch.Tensor,  # [B] obtained between t+1 and t+multi_step (then summed up using discounted sum)
-        # next_state: torch.Tensor,  # [B, state_shapes ...] obtained at t+multi_steps
-        # done: torch.Tensor,  # [B] obtained at t+multi_steps
-        # truncated: torch.Tensor,  # [B] obtained at t+multi_steps
-        # advantage_tp1 : torch.Tensor, # [B]
+    @torch.no_grad()
+    def compute(self, agent: AbstractPolicyAgent):
+        mem = agent.rollout_memory
 
-        y_pred, y_true = self.value_function.compute_loss_inputs(experience=experience)    
-        delta = self.value_function.out_to_value(y_true) - self.value_function.out_to_value(y_pred)
+        if "advantage" not in mem.names: mem.add_field("advantage", (), torch.float32, default_value=0.0)
+        if "returns" not in mem.names: mem.add_field("returns", (), torch.float32, default_value=0.0)
 
-        end = experience.done | experience.truncated
-
-        advantage_t = delta + self.value_function.gamma * self.lamb * (1 - end.float()) * advantage_tp1
-        
-        # self._state_tp1 = state
-        return advantage_t
-    
-    @torch.no_grad
-    def compute(self, agent : AbstractPolicyAgent):
-        assert isinstance(agent, AbstractPolicyAgent), "Advantage Functions can only be used with PolicyAgents"
-        if "advantage" not in agent.rollout_memory.names: 
-            agent.rollout_memory.add_field("advantage", (), torch.float32, default_value=0)
-
-        dataloader = torch.utils.data.DataLoader(
-            dataset=ReverseDatasetProxy(dataset=agent.rollout_memory), # Reserving the dataset so we go through the data backwards.
-            batch_size = agent.nb_env,
-            shuffle= False, in_order=True,
-            collate_fn=do_nothing_collate
+        backward_loader = torch.utils.data.DataLoader(
+            dataset=BackwardDatasetProxy(dataset=mem), # Allow to iterate through a list backback
+            batch_size=agent.nb_env,
+            shuffle=False,
+            collate_fn=do_nothing_collate,
         )
 
-        advantage = torch.zeros(size=(agent.nb_env,))
-        for experience in dataloader:
-            experience : ExperienceSample
-            advantage = self._gae(experience=experience, advantage_tp1 = advantage)
-            agent.rollout_memory["advantage", experience.indices] = advantage
+        next_adv = torch.zeros((agent.nb_env,), dtype=torch.float32, device=mem.memory_state.device)
+        # v_next is V(s_{t+1}) for the "next time slice" during backward scan.
         
-        agent.rollout_memory
+        v_tp1 = None
+
+        for exp in backward_loader: 
+            v_t = self.value_function.V(exp.state) # V(s_t)
+            if v_tp1 is None: v_tp1 = self.value_function.V(exp.next_state) # V(s_{t+1})
+
+            nonterminal = (~exp.done).to(torch.float32)
+
+            # δ_t = r_t + γ * 1_{not done} * V(s_{t+1}) - V(s_t)
+            delta = exp.reward.to(torch.float32) + self.gamma * nonterminal * v_tp1 - v_t
+
+            # A_t = δ_t + γλ * 1_{not done} * A_{t+1}
+            adv_t = delta + self.gamma * self.lamb * nonterminal * next_adv
+
+            ret_t = adv_t + v_t
+
+            mem["advantage", exp.indices] = adv_t
+            mem["returns", exp.indices] = ret_t
+
+            next_adv = adv_t.detach()
+            v_tp1 = v_t.detach() # For next iteration

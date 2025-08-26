@@ -49,7 +49,7 @@ class MainNet(AgentService):
         return x
 
 class PolicyNet(AgentService):
-    def __init__(self, main_net : torch.nn.Module, hidden_dim : int, n_actions : int, *args, **kwargs):
+    def __init__(self, main_net : torch.nn.Module, hidden_dim : int, nb_actions : int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D
         self.main_net = main_net
@@ -58,8 +58,8 @@ class PolicyNet(AgentService):
         for i in range(2):
             self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features=hidden_dim, out_features= hidden_dim))
             self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
-        self.head_mean = torch.nn.Linear(in_features=hidden_dim, out_features=n_actions)
-        self.head_std = torch.nn.Linear(in_features=hidden_dim, out_features=n_actions)
+        self.head_mean = torch.nn.Linear(in_features=hidden_dim, out_features=nb_actions)
+        self.head_std = torch.nn.Linear(in_features=hidden_dim, out_features=nb_actions)
         
     
     def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
@@ -69,7 +69,29 @@ class PolicyNet(AgentService):
             x = module(x)
 
         return self.head_mean(x), torch.clamp(self.head_std(x), min = -5, max = 1)
-    
+
+
+class ValueNet(AgentService):
+    def __init__(self, main_net : torch.nn.Module, hidden_dim : int, nb_actions : int, nb_atoms : int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # We suppose observation_space and action_space to be 1D
+        self.main_net = main_net
+        self.hidden_net = hidden_dim
+        self.nb_actions = nb_actions
+        self.nb_atoms = nb_atoms
+        self.module_list = torch.nn.ModuleList()
+        for i in range(2):
+            self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features=hidden_dim, out_features= hidden_dim))
+            self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
+        self.head = torch.nn.Linear(in_features=hidden_dim, out_features=nb_actions * nb_atoms)
+        
+    def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
+        # state : [batch, nb_obs]
+        x = self.main_net(state)
+        for module in self.module_list:
+            x = module(x)
+        return torch.reshape(self.head(x), shape = (-1, self.nb_actions, self.nb_atoms))
+
 class SequentialNet(torch.nn.Sequential, AgentService):
     def forward(self, *args, **kwargs):
         return super().forward(*args, **kwargs)
@@ -90,21 +112,25 @@ def main():
     policy_net = PolicyNet(
         main_net=main_net,
         hidden_dim=64,
-        n_actions= 2
+        nb_actions= 2
     )
-    value_net = SequentialNet(
-        main_net,
-        torch.nn.Linear(hidden_dim, hidden_dim),
-        torch.nn.ReLU(),
-        torch.nn.Linear(hidden_dim, 1)
+    value_net = ValueNet(
+        main_net=main_net,
+        hidden_dim=hidden_dim,
+        nb_actions=1,
+        nb_atoms=51
     )
     policy = ContinuousDeepPolicy(
         policy_net= policy_net,
         action_space= action_space
     )
-    value_function = DVNFunction(net = value_net, gamma= gamma, loss_fn=torch.nn.MSELoss())
+
+    value_function = DistributionalDQNFunction(
+        nb_atoms=51, v_min = -300, v_max=300, net = value_net, gamma = gamma, loss_fn= DistributionalLoss()
+    )
     advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
     policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.001)
+
     agent = A2CAgent(
         nb_env=nb_env,
         policy=policy,

@@ -1,7 +1,7 @@
 from rl_agents.value_functions.dqn_function import DQNFunction
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.value_agents.value_agent import AbstractValueAgent
-from rl_agents.replay_memory.replay_memory import BaseReplayMemory
+from rl_agents.replay_memory.replay_memory import BaseReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler
 from rl_agents.utils.collates import do_nothing_collate
 import torch
@@ -37,6 +37,9 @@ class DQNAgent(AbstractValueAgent):
         )
         self._dataloader_iter = iter(self.dataloader)
         assert isinstance(self.q_function, DQNFunction), "q_function must be from class DQNFunction, or inherit from it"
+
+        if isinstance(self.replay_memory, MultiStepReplayMemory):
+            self.q_function.gamma **= self.replay_memory.multi_step
 
 
     def sample(self, n_samples : int):

@@ -10,7 +10,7 @@ if __name__ == "__main__":
 from rl_agents.service import AgentService
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
-from rl_agents.policies.value_policy import ValuePolicy
+from rl_agents.policies.value_policy import QValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_functions.dqn_function import DQNFunction
@@ -66,20 +66,19 @@ def main():
     q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 20
+        tau= 1/50
     )
     q_function = DQNFunction(
         net= q_net,
         gamma= gamma,
-        loss_fn= torch.nn.MSELoss(),
-        multi_steps=multi_step
+        loss_fn= torch.nn.MSELoss()
     )
     policy = EspilonGreedyPolicy(
         q = 1 - 4E-4,
         start_epsilon= 0.9,
         end_epsilon= 0.01,
         action_space= action_space,
-        policy= ValuePolicy(q_function= q_function)
+        policy= QValuePolicy(q_function= q_function)
     )
     agent = DQNAgent(
         nb_env= nb_env,
@@ -91,6 +90,9 @@ def main():
         optimizer= torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
         batch_size=64
     )
+
+    print("optimizer param count:", sum(p.numel() for p in agent.optimizer.param_groups[0]['params'] if p is not None))
+
     agent.train()
     episodes = 1000
     for i in range(episodes):
@@ -101,7 +103,7 @@ def main():
         truncated = False
         done = False
         state, infos = env.reset()
-        
+
         while not truncated and not done:
             action = agent.pick_action(state= state)
             next_state, reward, done, truncated, infos = env.step(action = int(action))

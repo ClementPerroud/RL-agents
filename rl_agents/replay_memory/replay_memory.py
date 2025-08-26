@@ -28,10 +28,9 @@ class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
 
     _max_length = None
     @property
-    def max_length(self):
-        if self._max_length is None: NotImplementedError(f"Please implement attribute max_length in {self.__class__.__name__}")
+    def max_length(self) -> int:
+        if self._max_length is None: raise AttributeError(f"{self.__class__.__name__}.max_length is not set")
         return self._max_length
-
     @max_length.setter
     def max_length(self, val): self._max_length = val
 
@@ -260,8 +259,8 @@ class MultiStepReplayMemory(BaseReplayMemory):
         )
 
         # pré-calc γ^k pour l’agrégation vectorielle
-        self._gammas = gamma ** torch.arange(
-            multi_step, device=device, dtype=torch.float32
+        self.register_buffer("_gammas", 
+            tensor = gamma ** torch.arange(multi_step, device=device, dtype=torch.float32)
         )
 
     def _aggregate(self, buf: deque):

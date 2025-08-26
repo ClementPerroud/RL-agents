@@ -22,21 +22,21 @@ class DistributionalDQNFunction(DQNFunction):
             net : AgentService,
             gamma : float,
             loss_fn : torch.nn.modules.loss._Loss,
-            multi_steps = None,
         ):
-        super().__init__(net=net, gamma=gamma, loss_fn = loss_fn, multi_steps= multi_steps)
+        super().__init__(net=net, gamma=gamma, loss_fn = loss_fn)
         self.nb_atoms = nb_atoms
         self.v_min = v_min
         self.v_max = v_max
 
         self._delta_atoms = (v_max - v_min) / (nb_atoms - 1)
-        self._atoms : torch.Tensor = torch.linspace(start = self.v_min, end = self.v_max, steps = self.nb_atoms, dtype = torch.float32)
+        # self._atoms = torch.nn.Parameter(torch.linspace(start = self.v_min, end = self.v_max, steps = self.nb_atoms, dtype = torch.float32))
+        self.register_buffer("_atoms", torch.linspace(start = self.v_min, end = self.v_max, steps = self.nb_atoms, dtype = torch.float32))
 
     def compute_td_errors(self, loss_inputs : tuple[torch.Tensor, torch.Tensor]):
         y_pred, y_true = loss_inputs
-        return self.out_to_value(y_true) - self.out_to_value(y_pred)
+        return self.get_value_from_atom_probs(y_true) - self.get_value_from_atom_probs(y_pred)
     
-    def out_to_value(self, inputs):
+    def get_value_from_atom_probs(self, inputs):
         return (inputs * self._atoms).sum(dim = -1)
 
     def compute_loss_inputs(self, experience : Experience) -> None:
@@ -45,7 +45,7 @@ class DistributionalDQNFunction(DQNFunction):
 
         with torch.no_grad(), eval_mode(self):
             p_next = self.Q(state=experience.next_state, return_atoms= True) #[batch, nb_actions, nb_atoms]
-            q_next = self.out_to_value(p_next) # [batch, nb_actions]
+            q_next = self.get_value_from_atom_probs(p_next) # [batch, nb_actions]
             a_star = torch.argmax(q_next, dim = 1, keepdim= True) #[batch]
             p_next = p_next.gather(1, a_star.unsqueeze(-1).expand(-1, 1, self.nb_atoms)).squeeze(1) # [batch, nb_atoms]
 
@@ -55,12 +55,13 @@ class DistributionalDQNFunction(DQNFunction):
                 experience.reward.unsqueeze(-1) + (1 - experience.done.to(p_next.dtype)).unsqueeze(-1)* self.gamma * self._atoms.unsqueeze(0), 
                 min = self.v_min, max = self.v_max
             ) #[batch, nb_atoms]
+            
             b = (T_z - self.v_min) / self._delta_atoms  #[batch, nb_atoms]
             l = torch.floor(b).long().clamp_max(self.nb_atoms - 1) #[batch, nb_atoms]
             u = torch.ceil(b).long().clamp_max(self.nb_atoms - 1) #[batch, nb_atoms]
     
-            
-            m = torch.zeros(size = (batch_size, self.nb_atoms), dtype=torch.float32) # [batch, nb_atoms]
+            m = torch.zeros(batch_size, self.nb_atoms, dtype=torch.float32, device=p_next.device)# [batch, nb_atoms]
+
             m.scatter_add_(1, l, (p_next * (u.float() - b)).float())
             m.scatter_add_(1, u, (p_next * (b - l.float())).float())
             y_true = m
@@ -70,7 +71,7 @@ class DistributionalDQNFunction(DQNFunction):
     def Q(self, state: torch.Tensor, return_atoms = False) -> torch.Tensor:
         q_logits = self.net.forward(state)
         q_prob = torch.softmax(q_logits, dim=-1) #[batch/nb_env, nb_actions, nb_atoms]
-        return q_prob if return_atoms else self.out_to_value(q_prob)
+        return q_prob if return_atoms else self.get_value_from_atom_probs(q_prob)
     
     def Q_a(
         self, state: torch.Tensor, actions: torch.Tensor, return_atoms = False
