@@ -41,10 +41,6 @@ class DQNAgent(AbstractValueAgent):
         if isinstance(self.replay_memory, MultiStepReplayMemory):
             self.q_function.gamma **= self.replay_memory.multi_step
 
-
-    def sample(self, n_samples : int):
-        return self.replay_memory.sample(agent=self, batch_size=n_samples, training=False)
-
     def store(self, **kwargs):
         assert self.training, "Cannot store any memory during eval."
         
@@ -79,7 +75,7 @@ class DQNAgent(AbstractValueAgent):
     def train_agent(self) -> float:
         super().train_agent()
         
-        if self.step % self.train_every == 0 and self.step > self.batch_size:
+        if self.step % self.train_every == 0 and len(self.replay_memory) > self.batch_size:
             # Training Q function
             loss = self.train_step_from_dataloader()
             return loss

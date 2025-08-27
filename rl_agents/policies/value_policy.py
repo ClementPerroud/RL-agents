@@ -6,15 +6,29 @@ import torch
 
 
 # Use for testing purpose
+class QValueDiscretePolicy(
+    AbstractPolicy,
+):
+    def __init__(self, net : AbstractQFunction):
+        super().__init__()
+        self.net = net
+        # input [batch, state_shape], action [batch, action_shape] -> output [bath]
+
+    def pick_action(self, state: torch.Tensor):
+        return torch.argmax(
+            self.net(state = state), 
+            dim=-1
+        )
+    
 class QValuePolicy(
     AbstractPolicy,
 ):
     def __init__(self, q_function : AbstractQFunction):
         super().__init__()
-        self.q_function = q_function
+        self.q_function = q_function.Q
 
-    def pick_action(self, agent: AbstractAgent, state: torch.Tensor):
+    def pick_action(self, state: torch.Tensor):
         return torch.argmax(
-            self.q_function.Q(state = torch.as_tensor(state)), 
+            self.q_function(state = torch.as_tensor(state)), 
             dim=-1
         )

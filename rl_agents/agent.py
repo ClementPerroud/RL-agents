@@ -33,7 +33,7 @@ class AbstractAgent(AbstractPolicy, AgentService, ABC):
         single_env_condition = self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1)
         if single_env_condition: state = state.unsqueeze(0)
 
-        pick_action_return = self.policy.pick_action(agent=self, state=state)
+        pick_action_return = self.policy.pick_action(state=state)
         
         if single_env_condition: 
             if isinstance(pick_action_return, torch.Tensor): pick_action_return = pick_action_return.squeeze(0)

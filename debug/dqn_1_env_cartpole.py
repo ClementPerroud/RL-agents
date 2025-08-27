@@ -66,7 +66,7 @@ def main():
     q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 1/50
+        tau=  1/20,
     )
     q_function = DQNFunction(
         net= q_net,
@@ -87,11 +87,9 @@ def main():
         q_function= q_function,
         replay_memory=replay_memory,
         sampler=sampler,
-        optimizer= torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 3E-4, amsgrad=True),
         batch_size=64
     )
-
-    print("optimizer param count:", sum(p.numel() for p in agent.optimizer.param_groups[0]['params'] if p is not None))
 
     agent.train()
     episodes = 1000
@@ -109,7 +107,7 @@ def main():
             next_state, reward, done, truncated, infos = env.step(action = int(action))
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
-
+            done = done or truncated
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()
 

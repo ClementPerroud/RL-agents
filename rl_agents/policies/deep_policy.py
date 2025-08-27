@@ -29,7 +29,7 @@ class AbstractDeepPolicy(AbstractPolicy):
 
 
 class DiscreteDeepPolicy(AbstractDeepPolicy):
-    def action_distributions(self, agent: 'AbstractAgent', state : torch.Tensor) -> torch.Tensor:
+    def action_distributions(self, state : torch.Tensor) -> torch.Tensor:
         # state : [batch, state_shape ...]
         action_probabilities : torch.Tensor= self.policy_net.forward(state)
         # action_probabilities : [batch, nb_action]
@@ -38,18 +38,18 @@ class DiscreteDeepPolicy(AbstractDeepPolicy):
         
         return (action_probabilities,)
     
-    def evaluate_log_prob(self, agent: 'AbstractAgent', action_distributions: torch.Tensor, action : torch.Tensor)-> torch.Tensor:
+    def evaluate_log_prob(self, action_distributions: torch.Tensor, action : torch.Tensor)-> torch.Tensor:
         action_probabilities, = action_distributions
         return (
             torch.take_along_dim(action_probabilities, action.long().unsqueeze(-1), dim = -1).squeeze(-1).clamp_min(1E-8)
         ).log()
 
-    def pick_action(self, agent, state : torch.Tensor)-> torch.Tensor:
+    def pick_action(self, state : torch.Tensor)-> torch.Tensor:
         # state : [batch, state_shape ...]
-        action_probabilities, = self.action_distributions(agent=agent, state=state)
+        action_probabilities, = self.action_distributions(state=state)
         action = torch.multinomial(input=action_probabilities, num_samples=1).squeeze(-1) # Pick the actions randomly following their given probabilities.
         
-        log_prob = self.evaluate_log_prob(agent=agent, action_distributions= (action_probabilities,), action=action)
+        log_prob = self.evaluate_log_prob(action_distributions= (action_probabilities,), action=action)
         return action.squeeze(-1), log_prob
         # shape [batch]
 
@@ -75,7 +75,7 @@ class ContinuousDeepPolicy(AbstractDeepPolicy):
             self.register_buffer("loc",   (self.high + self.low) / 2)
         self.epsilon = 1e-4
 
-    def action_distributions(self, agent: 'AbstractAgent', state) -> tuple[torch.Tensor, torch.Tensor]:
+    def action_distributions(self, state) -> tuple[torch.Tensor, torch.Tensor]:
         mean, log_std = self.policy_net(state)  # type: ignore
         if mean.ndim == 1:
             mean = mean.unsqueeze(-1)
@@ -103,14 +103,14 @@ class ContinuousDeepPolicy(AbstractDeepPolicy):
             # unbounded actions: no squashing/affine
             return torch.distributions.Independent(base, 1)
 
-    def evaluate_log_prob(self, agent, action_distributions, action):
+    def evaluate_log_prob(self, action_distributions, action):
         action = action.clamp(self.low + self.epsilon, self.high - self.epsilon)
         mean, log_std = action_distributions
         dist = self._dist(mean, log_std)
         return dist.log_prob(action)
 
-    def pick_action(self, agent, state: torch.Tensor):
-        mean, log_std = self.action_distributions(agent=agent, state=state)
+    def pick_action(self, state: torch.Tensor):
+        mean, log_std = self.action_distributions(state=state)
         dist = self._dist(mean, log_std)
         action  = dist.rsample()
         # keep a hair away from hard bounds to avoid -inf jacobians at exactly ±1 after affine

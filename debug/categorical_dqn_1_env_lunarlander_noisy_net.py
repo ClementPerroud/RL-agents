@@ -77,12 +77,6 @@ def main():
         loss_fn= DistributionalLoss(),
     )
     policy = QValuePolicy(q_function=q_function)
-    # policy = EspilonGreedyPolicy(
-    #     q = 1 - 1E-4,
-    #     start_epsilon= 0.9,
-    #     end_epsilon= 0.01,
-    #     action_space= action_space
-    # )
     agent = DQNAgent(
         nb_env= nb_env,
         policy= policy,
@@ -90,7 +84,7 @@ def main():
         train_every= 3,
         replay_memory=replay_memory,
         sampler=sampler,
-        optimizer= torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
+        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
         batch_size=64
     )
     agent.train()

@@ -9,7 +9,7 @@ import torch
 
 class AbstractVFunction(AgentService, ABC):
     @abstractmethod
-    def V(self, state: torch.Tensor, training : bool) -> torch.Tensor: ...
+    def V(self, state: torch.Tensor) -> torch.Tensor: ...
 
     _gamma = None
     @property

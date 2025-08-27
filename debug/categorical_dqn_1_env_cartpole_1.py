@@ -60,7 +60,7 @@ def main():
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 1/50
+        tau= 1/20
     )
     q_function = DistributionalDQNFunction(
         nb_atoms= nb_atoms, v_min=v_min, v_max=v_max,

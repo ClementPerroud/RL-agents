@@ -16,23 +16,23 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
     @abstractmethod
     def epsilon_function(self, agent: AbstractAgent): ...
 
-    def pick_action(self, agent: AbstractAgent, state: torch.Tensor):
-
-        if not self.training:
-            return self.policy.pick_action(agent, state)
+    def pick_action(self, state: torch.Tensor):
         
+        nb_env = state.size(0)
+        if not self.training:
+            return self.policy.pick_action(state)
         # state : (nb_env, ...)
-        rands = torch.rand(agent.nb_env)  # shape : (nb_env,)
+        rands = torch.rand(nb_env)  # shape : (nb_env,)
         env_random_action = rands < self.epsilon
         env_model_action = ~env_random_action
         actions = torch.zeros(
-            size=(agent.nb_env,) + self.action_space.shape
+            size=(nb_env,) + self.action_space.shape
         ).long() # shape (nb_env, action_shape ...)
         if env_model_action.any():
             masked_state = state[
                 env_model_action
             ]  # shape (nb_env_selected,  state_shape ...)
-            model_actions = self.policy.pick_action(agent = agent, state = masked_state)
+            model_actions = self.policy.pick_action(state = masked_state)
             actions[env_model_action] = model_actions.long()
 
         if env_random_action.any():
@@ -42,8 +42,6 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
             ).long()
             actions[env_random_action] = random_actions
 
-        if agent.nb_env == 1:
-            actions = actions[0]
         return actions
 
     def update(self, agent: AbstractAgent):

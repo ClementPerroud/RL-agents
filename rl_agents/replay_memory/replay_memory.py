@@ -15,9 +15,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.agent import AbstractAgent
 
-import gymnasium as gym
-gym.Env()
-
 torch.utils.data.TensorDataset
 class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
     @abstractmethod

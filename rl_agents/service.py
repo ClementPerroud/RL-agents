@@ -16,6 +16,6 @@ class AgentService(torch.nn.Module, ABC):
         self.update(agent=agent)
         for element in self.children():
             if isinstance(element, AgentService):
-                element.__update__(agent=self)
+                element.__update__(agent=agent)
         
     def update(self, agent: "AbstractAgent"): ...
