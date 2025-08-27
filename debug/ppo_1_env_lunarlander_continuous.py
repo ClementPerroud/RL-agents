@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 from rl_agents.service import AgentService
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
-from rl_agents.policies.value_policy import QValuePolicy
+from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
@@ -18,7 +18,7 @@ from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
 from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
 from rl_agents.trainers.trainer import Trainer
 
-from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
+from rl_agents.policy_agents.ppo_agent import PPOAgent, PPOLoss
 from rl_agents.policies.deep_policy import ContinuousDeepPolicy
 from rl_agents.value_functions.dqn_function import DVNFunction
 from rl_agents.policy_agents.advantage_function import GAEFunction
@@ -47,7 +47,6 @@ class MainNet(AgentService):
         
         # output : [batch, hidden_dim]
         return x
-
 class PolicyNet(AgentService):
     def __init__(self, main_net : torch.nn.Module, hidden_dim : int, n_actions : int, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -68,7 +67,7 @@ class PolicyNet(AgentService):
         for module in self.module_list:
             x = module(x)
 
-        return self.head_mean(x), torch.clamp(self.head_std(x), min = -5, max = 1)
+        return self.head_mean(x), torch.clamp(self.head_std(x), min = -20, max = 2)
     
 class SequentialNet(torch.nn.Sequential, AgentService):
     def forward(self, *args, **kwargs):
@@ -102,16 +101,17 @@ def main():
         policy_net= policy_net,
         action_space= action_space
     )
-    value_function = DVNFunction(net = value_net, gamma= gamma, loss_fn=torch.nn.MSELoss())
+    value_function = DVNFunction(net = value_net, gamma= gamma, trainer= Trainer(loss_fn=torch.nn.MSELoss()))
     advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
-    policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.001)
-    agent = A2CAgent(
+    policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.005)
+    agent = PPOAgent(
         nb_env=nb_env,
         policy=policy,
+        value_function=value_function,
         advantage_function=advantage_function,
         policy_loss=policy_loss,
         rollout_period= 2048,
-        epoch_per_rollout=8,
+        epoch_per_rollout=4,
         batch_size=64,
         observation_space=observation_space,
         action_space=action_space,
@@ -130,12 +130,12 @@ def main():
         state, infos = env.reset()
         
         while not truncated and not done:
-            action, log_prob = agent.pick_action(state= state)
+            action = agent.pick_action(state= state)
             next_state, reward, done, truncated, infos = env.step(action = action)
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
 
-            agent.store(state=state, action=action, reward=reward, next_state=next_state, done=done, truncated=truncated, log_prob=log_prob)
+            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated = truncated)
             loss = agent.train_agent()
 
             if loss is not None: episode_losses.append(loss)

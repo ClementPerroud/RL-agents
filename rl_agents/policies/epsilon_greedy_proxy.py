@@ -7,11 +7,11 @@ from gymnasium.spaces import Space
 import math
 
 class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
-    def __init__(self, policy : AbstractPolicy, action_space: Space, epsilon : int):
+    def __init__(self, policy : AbstractPolicy, action_space: Space):
         super().__init__()
         self.policy = policy
         self.action_space = action_space
-        self.epsilon = epsilon
+        self.epsilon = 1.0
 
     @abstractmethod
     def epsilon_function(self, agent: AbstractAgent): ...
@@ -52,7 +52,7 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
 
 class EspilonGreedyPolicy(BaseEspilonGreedyPolicy):
     def __init__(self, policy : AbstractPolicy, q: float, action_space: Space, end_epsilon: float, start_epsilon : float = 1):
-        super().__init__(policy= policy, action_space=action_space, epsilon= start_epsilon)
+        super().__init__(policy= policy, action_space=action_space)
         self.q = q
         self.start_epsilon = start_epsilon
         self.end_epsilon = end_epsilon

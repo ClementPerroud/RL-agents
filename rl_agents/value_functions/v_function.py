@@ -10,11 +10,3 @@ import torch
 class AbstractVFunction(AgentService, ABC):
     @abstractmethod
     def V(self, state: torch.Tensor, training : bool) -> torch.Tensor: ...
-
-    _gamma = None
-    @property
-    def gamma(self) -> int:
-        if self._gamma is None: raise AttributeError(f"{self.__class__.__name__}.gamma is not set")
-        return self._gamma
-    @gamma.setter
-    def gamma(self, val): self._gamma = val

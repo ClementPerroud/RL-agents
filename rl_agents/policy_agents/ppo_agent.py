@@ -17,33 +17,38 @@ import gymnasium as gym
 import itertools    
 
 class PPOLoss(AgentService):
-    def __init__(self, epsilon: float, entropy_loss_coeff: float, value_clip_eps: float | None = None, *args, **kwargs):
+    def __init__(self,
+            epsilon : float, 
+            entropy_loss_coeff : float,
+            *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.entropy_loss_coeff = entropy_loss_coeff
         self.epsilon = epsilon
-        self.value_clip_eps = value_clip_eps
+    
+    def forward(self, agent : AbstractAgent, policy : AbstractDeepPolicy, experience):
+        # advantage : [batch]
 
-    def forward(self, agent: AbstractAgent, policy: AbstractDeepPolicy, experience):
-        mean_logit = policy.action_distributions(agent=agent, state=experience.state)
-        logp_new = policy.evaluate_log_prob(agent=agent, action_distributions=mean_logit, action=experience.action)
-
-        logp_old = experience.log_prob.detach()
-        if logp_old.isnan().sum() > 0:
-            print("CATCH")
-
-        ratio = (logp_new - logp_old).clamp(min=-5, max = 2).exp()
-        adv = experience.advantage.detach()
-
-        unclipped = ratio * adv
-        clipped = ratio.clamp(1 - self.epsilon, 1 + self.epsilon) * adv
-        policy_obj = torch.minimum(unclipped, clipped).mean()
-
-        entropy = policy.entropy_loss(*mean_logit)          # averaged
-
-        # We only return -(policy + entropy); value loss is computed outside with returns
-        return -(policy_obj + self.entropy_loss_coeff * entropy)
+        action_distributions = policy.action_distributions(agent=agent, state=experience.state)
+        ratio = torch.exp(
+            policy.evaluate_log_prob(
+                agent=agent,
+                action_distributions=action_distributions,
+                action = experience.action,
+            )
+            - experience.log_prob
+        )
+        # ratio : [batch]
+        entropy_loss = policy.entropy_loss(*action_distributions)
+        p1 = ratio * experience.advantage
+        p2 = torch.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * experience.advantage
+        loss =  - ( torch.minimum(p1, p2).mean() + self.entropy_loss_coeff * entropy_loss)
+        return loss
 
 
+class Actor: ...
+class Critic: ...
+
+class AdvantageCritic: ...
 
 class A2CAgent(AbstractPolicyAgent):
     """Advantage Actor-Critic Agent"""
@@ -72,15 +77,12 @@ class A2CAgent(AbstractPolicyAgent):
 
         self.rollout_period = rollout_period
         self.epoch_per_rollout = epoch_per_rollout
-        self.rollout_memory = RolloutMemory(max_length=rollout_period, observation_space=observation_space, action_space=action_space)
+        self.rollout_memory = RolloutMemory(max_length=rollout_period * 2, observation_space=observation_space, action_space=action_space)
         self.policy_loss = policy_loss
 
         self.batch_size = batch_size
 
-        self._opt_parameters = list({id(p): p for p in itertools.chain(
-            self.policy.parameters(),
-            self.advantage_function.parameters())
-        }.values())
+        self._opt_parameters = itertools.chain(self.policy.parameters(), self.advantage_function.parameters())
         self.optimizer = torch.optim.Adam(
             params=self._opt_parameters,
             lr = 3E-4,
@@ -88,16 +90,14 @@ class A2CAgent(AbstractPolicyAgent):
         )
         self.values_loss_coeff = values_loss_coeff
 
-    @torch.no_grad()
+    
     def store(self, **kwargs):
         assert self.training, "Cannot store any memory during eval. Please set your agent to TRAINING mode."
         
         for key, value in kwargs.items():
             kwargs[key] = torch.as_tensor(value)
             if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
-        # Adding log_prob        
-        if kwargs["log_prob"].isnan().sum() > 0:
-            print("CATCH ", kwargs["log_prob"])
+        # Adding log_prob
         self.rollout_memory.store(agent=self, **kwargs)
 
 
@@ -111,8 +111,8 @@ class A2CAgent(AbstractPolicyAgent):
             
             # 2 - Start the training
             # Normalize advantage
-            adv = self.rollout_memory["advantage"][:len(self.rollout_memory)]
-            self.rollout_memory["advantage"] = (adv - adv.mean()) / (adv.std().clamp_min(1e-8))
+            advantages = self.rollout_memory["advantage"]
+            self.rollout_memory["advantage"] = (advantages - torch.mean(advantages))/(torch.std(advantages) + 1E-8)
 
             data_loader = torch.utils.data.DataLoader(
                 dataset=self.rollout_memory,
@@ -121,23 +121,20 @@ class A2CAgent(AbstractPolicyAgent):
                 collate_fn=do_nothing_collate,
             )
             losses = []
-            for _ in range(self.epoch_per_rollout):
+            for i in range(self.epoch_per_rollout):
                 for experience in data_loader:
                     self.optimizer.zero_grad()
 
-                    # Actor loss (PPO clipped)
-                    policy_loss = self.policy_loss(agent=self, policy=self.policy, experience=experience)
+                    policy_loss = self.policy_loss(agent = self, policy = self.policy, experience = experience)
+                    value_loss =  self.advantage_function.value_function.loss_fn(
+                        *self.advantage_function.value_function.compute_loss_inputs(experience=experience)
+                    ).mean()
+                    
+                    loss = policy_loss + self.values_loss_coeff* value_loss
 
-                    # Critic loss to GAE returns
-                    loss_inputs = self.advantage_function.value_function.compute_loss_inputs(experience=experience)
-                    value_loss = self.advantage_function.value_function.loss_fn(*loss_inputs).mean()
-
-                    loss = policy_loss + self.values_loss_coeff * value_loss
-                    with torch.autograd.set_detect_anomaly(True):
-                        loss.backward()
-
-                    # torch.nn.utils.clip_grad_norm_(self.policy.policy_net.parameters(), max_norm=0.5)
-                    # torch.nn.utils.clip_grad_norm_(self.advantage_function.value_function.parameters(), max_norm=0.5)
+                    loss.backward()
+                    # torch.nn.utils.clip_grad_value_(parameters=self.policy.policy_net.parameters(), clip_value= 10.)
+                    # torch.nn.utils.clip_grad_value_(parameters=self.advantage_function.value_function.parameters(), clip_value= 10.)
                     self.optimizer.step()
                     losses.append(loss.item())
             

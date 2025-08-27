@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 from rl_agents.service import AgentService
 from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
-from rl_agents.policies.value_policy import QValuePolicy
+from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
@@ -73,14 +73,15 @@ def main():
     q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
     q_net = SoftDoubleQNNProxy(
         q_net = q_net,
-        tau= 1/20
+        tau= 20
     )
     q_function = DistributionalDQNFunction(
         nb_atoms=nb_atoms,
         v_min=v_min, v_max=v_max,
         net=q_net,
         loss_fn = DistributionalLoss(),
-        gamma= gamma
+        gamma= gamma,
+        multi_steps= multi_step,
     )
     # q_net = NoisyNetProxy(q_net=q_net, std_init= 0.2)
 
@@ -89,7 +90,7 @@ def main():
         start_epsilon= 0.9,
         end_epsilon= 0.01,
         action_space= action_space,
-        policy= QValuePolicy(q_function=q_function)
+        policy= ValuePolicy(q_function=q_function)
     )
     agent = DQNAgent(
         nb_env= nb_env,

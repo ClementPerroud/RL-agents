@@ -16,10 +16,14 @@ class Trainable(ABC):
     @abstractmethod
     def compute_td_errors(self): ...
 
-    _trainer = None
     @property
-    def trainer(self) -> int:
-        if self._trainer is None: raise AttributeError(f"{self.__class__.__name__}.trainer is not set")
-        return self._trainer
+    def trainer(self):
+        try:
+            if self._trainer is not None: return self._trainer
+            raise ValueError(f"Please provide a Trainer to {self.__class__.__name__}")
+        except AttributeError as e:
+            raise ValueError(f"Please call Trainable.__init__(self, trainer = trainer) in __init__ method of object {self.__class__.__name__}.")
+        
     @trainer.setter
-    def trainer(self, val): self._trainer = val
+    def trainer(self, value : 'Trainer'):
+        self._trainer = value

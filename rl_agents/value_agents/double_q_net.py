@@ -19,6 +19,9 @@ class DoubleQNNProxy(AgentService):
         self.q_net_target: AgentService = deepcopy(q_net)
         self.q_net_target.requires_grad_(False)
 
+        self.q_net = self.q_net
+        self.q_net_target = self.q_net_target
+
         self._copy_weights()
 
     def forward(self, *args, **kwargs):
@@ -37,18 +40,18 @@ class DoubleQNNProxy(AgentService):
 class SoftDoubleQNNProxy(DoubleQNNProxy):
     def __init__(
         self,
-        q_net : 'AgentService',
-        tau: int,
+        *args,
         **kwargs
-    ):
-        super().__init__(q_net=q_net, tau=tau)
+    ):  
+        super().__init__(*args, **kwargs)
+        self.tau_rate = 1/self.tau
 
     @torch.no_grad()
     def update(self, agent: AbstractAgent):
         target_net_state_dict = self.q_net_target.state_dict()
-        net_state_dict = self.q_net.state_dict()
-        for key in net_state_dict:
-            target_net_state_dict[key] = net_state_dict[key]*self.tau + target_net_state_dict[key]*(1-self.tau)
+        policy_net_state_dict = self.q_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key]*self.tau_rate + target_net_state_dict[key]*(1-self.tau_rate)
         self.q_net_target.load_state_dict(target_net_state_dict)
 
 

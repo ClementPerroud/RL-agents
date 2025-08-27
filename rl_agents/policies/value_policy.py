@@ -6,7 +6,7 @@ import torch
 
 
 # Use for testing purpose
-class QValuePolicy(
+class ValuePolicy(
     AbstractPolicy,
 ):
     def __init__(self, q_function : AbstractQFunction):

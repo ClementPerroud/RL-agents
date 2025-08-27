@@ -17,17 +17,19 @@ class DVNFunction(AbstractVFunction):
             net : AgentService,
             gamma : float,
             loss_fn : torch.nn.modules.loss._Loss,
+            multi_steps = None,
         ):
         torch.nn.Module.__init__(self)
         self.net = net
         self.gamma = gamma
         self.loss_fn = loss_fn
         loss_fn.reduction= "none"
+        if multi_steps is not None: self.gamma **= multi_steps
 
-    
+
     def V(self, state: torch.Tensor) -> torch.Tensor:
         # state : [batch/nb_env, state_shape ...]
-        return self.net.forward(state).squeeze(-1)
+        return self.net.forward(state)
         # Return Q Values : [batch/nb_env]
     
 
@@ -35,11 +37,13 @@ class DVNFunction(AbstractVFunction):
         y_pred, y_true = loss_inputs
         return (y_true - y_pred).abs()
 
+    def out_to_value(self, inputs):
+        return inputs
 
     def compute_loss_inputs(self, experience : Experience) -> None:
         y_pred = self.V(experience.state)  # [batch/nb_env]
         with torch.no_grad(), eval_mode(self):
-            y_true = experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state) # is meant to predict the end of the mathematical sequence
+            y_true = experience.reward.unsqueeze(-1) + (1 - experience.done.float()).unsqueeze(-1) * self.gamma * self.V(experience.next_state) # is meant to predict the end of the mathematical sequence
         return (y_pred, y_true)
 
     def get_loss(self, agent : "AbstractAgent", experience : ExperienceSample) -> float:
@@ -50,6 +54,8 @@ class DVNFunction(AbstractVFunction):
         # done: torch.Tensor,  # [batch] obtained at t+multi_steps
         # weight: torch.Tensor = None,
         # replay_memory_callbacks: Callable
+
+
 
         loss_inputs = self.compute_loss_inputs(experience)
 
@@ -66,9 +72,10 @@ class DQNFunction(DVNFunction, AbstractQFunction):
     def __init__(self,
             net : AgentService,
             gamma : float,
-            loss_fn : torch.nn.modules.loss._Loss
+            loss_fn : torch.nn.modules.loss._Loss,
+            multi_steps = None,
         ):
-        super().__init__(net = net, gamma= gamma, loss_fn=loss_fn)
+        super().__init__(net = net, gamma= gamma, loss_fn=loss_fn, multi_steps=multi_steps)
 
     def Q(self, state: torch.Tensor) -> torch.Tensor:
         # state : [batch/nb_env, state_shape ...]
@@ -88,4 +95,4 @@ class DQNFunction(DVNFunction, AbstractQFunction):
 
         with torch.no_grad(), eval_mode(self):
             y_true = experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state)  # is meant to predict the end of the mathematical sequence
-        return y_pred, y_true.detach()
+        return y_pred, y_true
