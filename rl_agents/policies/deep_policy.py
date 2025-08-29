@@ -15,11 +15,11 @@ class AbstractDeepPolicy(AbstractPolicy):
         self.policy_net = policy_net
 
     @abstractmethod
-    def action_distributions(self, agent: 'AbstractAgent', state : torch.Tensor):
+    def action_distributions(self, state : torch.Tensor):
         ...
     
     @abstractmethod
-    def evaluate_log_prob(self, agent: 'AbstractAgent', action_distributions : torch.Tensor, action : torch.Tensor):
+    def evaluate_log_prob(self, action_distributions : torch.Tensor, action : torch.Tensor):
         ...
     
     @abstractmethod
@@ -29,7 +29,7 @@ class AbstractDeepPolicy(AbstractPolicy):
 
 
 class DiscreteDeepPolicy(AbstractDeepPolicy):
-    def action_distributions(self, agent: 'AbstractAgent', state : torch.Tensor) -> torch.Tensor:
+    def action_distributions(self, state : torch.Tensor) -> torch.Tensor:
         # state : [batch, state_shape ...]
         action_probabilities : torch.Tensor= self.policy_net.forward(state)
         # action_probabilities : [batch, nb_action]
@@ -38,18 +38,18 @@ class DiscreteDeepPolicy(AbstractDeepPolicy):
         
         return (action_probabilities,)
     
-    def evaluate_log_prob(self, agent: 'AbstractAgent', action_distributions: torch.Tensor, action : torch.Tensor)-> torch.Tensor:
+    def evaluate_log_prob(self, action_distributions: torch.Tensor, action : torch.Tensor)-> torch.Tensor:
         action_probabilities, = action_distributions
         return (
             torch.take_along_dim(action_probabilities, action.long().unsqueeze(-1), dim = -1).squeeze(-1).clamp_min(1E-8)
         ).log()
 
-    def pick_action(self, agent, state : torch.Tensor)-> torch.Tensor:
+    def pick_action(self, state : torch.Tensor, **kwargs)-> torch.Tensor:
         # state : [batch, state_shape ...]
-        action_probabilities, = self.action_distributions(agent=agent, state=state)
+        action_probabilities, = self.action_distributions(state=state)
         action = torch.multinomial(input=action_probabilities, num_samples=1).squeeze(-1) # Pick the actions randomly following their given probabilities.
         
-        log_prob = self.evaluate_log_prob(agent=agent, action_distributions= (action_probabilities,), action=action)
+        log_prob = self.evaluate_log_prob(action_distributions= (action_probabilities,), action=action)
         return action.squeeze(-1), log_prob
         # shape [batch]
 
@@ -65,7 +65,7 @@ class ContinuousDeepPolicy(AbstractDeepPolicy):
 
         super().__init__(policy_net=policy_net, *args, **kwargs)
 
-    def action_distributions(self, agent: 'AbstractAgent', state) -> torch.Tensor:
+    def action_distributions(self, state) -> torch.Tensor:
         action_mean, action_log_std = self.policy_net.forward(state) # type: ignore
         action_mean : torch.Tensor
         action_log_std : torch.Tensor
@@ -77,7 +77,7 @@ class ContinuousDeepPolicy(AbstractDeepPolicy):
             action_log_std.unsqueeze_(-1)
         return action_mean, action_log_std
     
-    def evaluate_log_prob(self, agent: 'AbstractAgent', action_distributions : tuple[torch.Tensor, torch.Tensor], action : torch.Tensor)-> torch.Tensor:
+    def evaluate_log_prob(self, action_distributions : tuple[torch.Tensor, torch.Tensor], action : torch.Tensor)-> torch.Tensor:
         mean, log_std = action_distributions
         std = log_std.exp()
 
@@ -101,16 +101,16 @@ class ContinuousDeepPolicy(AbstractDeepPolicy):
         a = torch.tanh(u)
         return self.loc + a * self.scale, a 
 
-    def pick_action(self, agent: 'AbstractAgent', state : torch.Tensor):
+    def pick_action(self, state : torch.Tensor, **kwargs):
         # state : [batch, state_shape ...]
-        action_mean, action_log_std = self.action_distributions(agent=agent, state=state)
+        action_mean, action_log_std = self.action_distributions(state=state, **kwargs)
 
         # action_mean : [batch, nb_action], action_log_std [batch, nb_actions]
         action_std = action_log_std.exp()
         u = action_mean + action_std * torch.randn_like(action_mean)  # reparam/sample
         action, _ = self._squash(u)            # [1,A]
         
-        log_prob = self.evaluate_log_prob(agent=agent, action_distributions= (action_mean, action_log_std), action=action)
+        log_prob = self.evaluate_log_prob(action_distributions= (action_mean, action_log_std), action=action)
         return action, log_prob
         # shape [batch]
 

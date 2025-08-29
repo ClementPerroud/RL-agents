@@ -21,7 +21,7 @@ gym.Env()
 torch.utils.data.TensorDataset
 class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
     @abstractmethod
-    def store(self, agent: "AbstractAgent", **kwargs): ...
+    def store(self, agent: "AbstractAgent", **kwargs) -> tuple[torch.Tensor, object]:...
 
     @abstractmethod
     def reset(self): ...
@@ -29,7 +29,7 @@ class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
     _max_length = None
     @property
     def max_length(self):
-        if self._max_length is None: NotImplementedError(f"Please implement attribute max_length in {self.__class__.__name__}")
+        if self._max_length is None: raise NotImplementedError(f"Please implement attribute max_length in {self.__class__.__name__}")
         return self._max_length
 
     @max_length.setter
@@ -61,9 +61,9 @@ class BaseReplayMemory(AbstractReplayMemory):
         max_length: int,
         fields: list[tuple[str, tuple, torch.dtype]],
         device: torch.DeviceObjType = None,
+        **kwargs
     ):
-        torch.nn.Module.__init__(self)
-        AgentService.__init__(self)
+        super().__init__(**kwargs)
         self.max_length = int(max_length)
         self.device = device
 
@@ -123,11 +123,11 @@ class BaseReplayMemory(AbstractReplayMemory):
             tensor=torch.full(size = self.sizes[name], fill_value=fill_value, dtype = self.dtypes[name]),
             persistent=True,
         )
-    def __len__(self):
-        return min(self.i, self.max_length)
+    
+    def __len__(self): return min(self.i, self.max_length)
 
     @torch.no_grad()
-    def store(self, agent: "AbstractAgent", experience = None, **kwargs):
+    def store(self, experience = None, **kwargs):
         """Save a experience"""
         
         if experience is not None: kwargs.update(asdict(experience))
@@ -139,32 +139,28 @@ class BaseReplayMemory(AbstractReplayMemory):
         i = int(self.i % self.max_length)
 
         nb_env = next(iter(kwargs.values())).size(0)
+
+        # Compute indices
+        if i+nb_env <= self.max_length: indices = torch.arange(i,i+nb_env)
+        else:
+            n_end = self.max_length - i
+            n_start = nb_env - n_end 
+            indices = torch.cat([torch.arange(i,i+nb_env) + torch.arange(0,n_start)])
+        indices = indices.long()
+
         for name, val in kwargs.items():
             try:
                 val_tensor = torch.as_tensor(val, dtype = self.dtypes[name])
             except KeyError:
                 warnings.warn(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
             else:
-                if i+nb_env <= self.max_length: getattr(self, f"memory_{name}")[i:i+nb_env] = val_tensor
-                else:
-                    n_end = self.max_length - i
-                    n_start = nb_env - n_end
-                    getattr(self, f"memory_{name}")[i:i+n_end] = val_tensor[:n_end]
-                    getattr(self, f"memory_{name}")[0:n_start] = val_tensor[n_end:n_end + n_start]
+                if i+nb_env <= self.max_length: 
+                    getattr(self, f"memory_{name}")[indices] = val_tensor
 
-        
         self.i += nb_env
-        # self.sampler.store(agent=agent, replay_memory = self, **kwargs)
+        return indices
 
-    # @torch.no_grad()
-    # def sample(self, agent : "AbstractAgent", batch_size: int) -> ExperienceSample:
-    #     if self.__len__() < batch_size:
-    #         return
-
-    #     batch_sample = self.sampler.sample(agent=agent, batch_size=batch_size, size=self.__len__())
-    #     return self[batch_sample]
-
-
+    @torch.no_grad()
     def __getitem__(self, loc) -> ExperienceSample:
         index : int | np.ndarray
         name :str
@@ -180,12 +176,14 @@ class BaseReplayMemory(AbstractReplayMemory):
                 indices=indices,
                 **asdict(self.__get_experience_from_indices__(indices=indices))
             )
-    def __getitems__(self, indices):
-        return self.__getitem__(loc = indices)
     
+    def __getitems__(self, indices): return self.__getitem__(loc = indices)
+    
+    @torch.no_grad()
     def __get_experience_from_values__(self, **kwargs): return self.experience_dataclass_generator(**{name : torch.as_tensor(value, dtype = self.dtypes[name]) for name, value in kwargs.items()})
     def __get_experience_from_indices__(self, indices): return self.experience_dataclass_generator(**{name : getattr(self, f"memory_{name}")[indices] for name in self.names})
 
+    @torch.no_grad()
     def __setitem__(self, loc, val):
         indices : int | np.ndarray
         name :str
@@ -240,7 +238,7 @@ class MultiStepReplayMemory(BaseReplayMemory):
     ):
         warnings.warn(
             f"When using {self.__class__.__name__}, please provide the multi_step parameter "
-            "for the services that support it (e.g.: DQNFunction, DistributionalDQNFunction ...)"
+            "for the services that support it (e.g.: DQN, C51DQN ...)"
         )
         assert isinstance(observation_space, Box)
         self.multi_step, self.gamma, self.nb_env = multi_step, gamma, nb_env
@@ -285,11 +283,11 @@ class MultiStepReplayMemory(BaseReplayMemory):
 
     # ---- API publique ----------------------------------------------
     @torch.no_grad()
-    def store(self,  agent: "AbstractAgent", **kwargs):
+    def store(self, **kwargs):
         """
         `state`, `action`, … : tenseurs dont la 0-ème dim = nb_env.
         """
-        
+        indices = []
         # Boucle fine sur les envs ; la plupart du temps nb_env <= 16, négligeable.
         for env_id in range(self.nb_env):
             kwargs_env = {key : val[env_id] for key, val in kwargs.items()}
@@ -300,13 +298,20 @@ class MultiStepReplayMemory(BaseReplayMemory):
 
             # fenêtre pleine : pousse une transition n-step
             if len(buf) == self.multi_step:
-                super().store(agent=agent, **self._aggregate(buf))
+                indices.append(
+                    super().store(**self._aggregate(buf))
+                )
                 buf.popleft()  # fenêtre glissante
 
             # fin d'épisode : flush des restes
             if experience_env.done or experience_env.truncated:
                 while buf:
-                    super().store(agent=agent, **self._aggregate(buf))
+                    indices.append(
+                        super().store(**self._aggregate(buf))
+                    )
                     buf.popleft()
+
+        if len(indices) == 0: return None 
+        return torch.cat(indices, dim = 0)
 
 

@@ -9,6 +9,8 @@ from typing import Sequence
 
 import torch
 from torch import nn
+from torch.nn.modules.lazy import LazyModuleMixin
+from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
 
 class NoisyLinear(nn.Linear):
@@ -44,6 +46,7 @@ class NoisyLinear(nn.Linear):
         device: None = None,
         dtype: torch.dtype | None = None,
         std_init: float = 0.1,
+        **kwargs
     ):
         nn.Module.__init__(self)
         self.in_features = int(in_features)
@@ -130,3 +133,83 @@ class NoisyLinear(nn.Linear):
         else:
             return None
 
+
+class NoisyLazyLinear(LazyModuleMixin, NoisyLinear):
+    """Noisy Lazy Linear Layer.
+
+    This class makes the Noisy Linear layer lazy, in that the in_feature argument does not need to be passed at
+    initialization (but is inferred after the first call to the layer).
+
+    For more context on noisy layers, see the NoisyLinear class.
+
+    Args:
+        out_features (int): out features dimension
+        bias (bool, optional): if ``True``, a bias term will be added to the matrix multiplication: Ax + b.
+            Defaults to ``True``.
+        device (DEVICE_TYPING, optional): device of the layer.
+            Defaults to ``"cpu"``.
+        dtype (torch.dtype, optional): dtype of the parameters.
+            Defaults to the default PyTorch dtype.
+        std_init (scalar): initial value of the Gaussian standard deviation before optimization.
+            Defaults to 0.1
+
+    """
+
+    def __init__(
+        self,
+        out_features: int,
+        bias: bool = True,
+        device: None = None,
+        dtype: torch.dtype | None = None,
+        std_init: float = 0.1,
+    ):
+        super().__init__(in_features=0, out_features=out_features, bias=bias, device=device, dtype=dtype, )
+        self.out_features = int(out_features)
+        self.std_init = std_init
+
+        self.weight_mu = UninitializedParameter(device=device, dtype=dtype)
+        self.weight_sigma = UninitializedParameter(device=device, dtype=dtype)
+        self.register_buffer(
+            "weight_epsilon", UninitializedBuffer(device=device, dtype=dtype)
+        )
+        if bias:
+            self.bias_mu = UninitializedParameter(device=device, dtype=dtype)
+            self.bias_sigma = UninitializedParameter(device=device, dtype=dtype)
+            self.register_buffer(
+                "bias_epsilon", UninitializedBuffer(device=device, dtype=dtype)
+            )
+        else:
+            self.bias_mu = None
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        if not self.has_uninitialized_params() and self.in_features != 0:
+            super().reset_parameters()
+
+    def reset_noise(self) -> None:
+        if not self.has_uninitialized_params() and self.in_features != 0:
+            super().reset_noise()
+
+    def initialize_parameters(self, input: torch.Tensor) -> None:
+        if self.has_uninitialized_params():
+            with torch.no_grad():
+                self.in_features = input.shape[-1]
+                self.weight_mu.materialize((self.out_features, self.in_features))
+                self.weight_sigma.materialize((self.out_features, self.in_features))
+                self.weight_epsilon.materialize((self.out_features, self.in_features))
+                if self.bias_mu is not None:
+                    self.bias_mu.materialize((self.out_features,))
+                    self.bias_sigma.materialize((self.out_features,))
+                    self.bias_epsilon.materialize((self.out_features,))
+                self.reset_parameters()
+                self.reset_noise()
+
+    @property
+    def weight(self) -> torch.Tensor:
+        if not self.has_uninitialized_params() and self.in_features != 0:
+            return super().weight
+
+    @property
+    def bias(self) -> torch.Tensor:
+        if not self.has_uninitialized_params() and self.in_features != 0:
+            return super().bias

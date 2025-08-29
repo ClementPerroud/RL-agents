@@ -3,7 +3,7 @@ from rl_agents.service import AgentService
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.replay_memory.sampler import RandomSampler
-from rl_agents.value_functions.v_function import AbstractVFunction
+from rl_agents.value_functions.value import V
 from rl_agents.policies.deep_policy import AbstractDeepPolicy
 from rl_agents.replay_memory.rollout_memory import RolloutMemory
 from rl_agents.replay_memory.policy_training_memory import PPOTrainingMemory
@@ -28,10 +28,9 @@ class PPOLoss(AgentService):
     def forward(self, agent : AbstractAgent, policy : AbstractDeepPolicy, experience):
         # advantage : [batch]
 
-        action_distributions = policy.action_distributions(agent=agent, state=experience.state)
+        action_distributions = policy.action_distributions(state=experience.state)
         ratio = torch.exp(
             policy.evaluate_log_prob(
-                agent=agent,
                 action_distributions=action_distributions,
                 action = experience.action,
             )
@@ -56,7 +55,7 @@ class A2CAgent(AbstractPolicyAgent):
             nb_env : int,
             policy : AbstractDeepPolicy,
             # policy : AbstractDeepPolicy, -> Actor -> Policy ?
-            # value_function : AbstractVFunction, -> Critic -> AdvantageFunction
+            # value_function : V, -> Critic -> AdvantageFunction
             advantage_function : BaseAdvantageFunction,
             policy_loss : PPOLoss,
 
@@ -98,7 +97,7 @@ class A2CAgent(AbstractPolicyAgent):
             kwargs[key] = torch.as_tensor(value)
             if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
         # Adding log_prob
-        self.rollout_memory.store(agent=self, **kwargs)
+        self.rollout_memory.store(**kwargs)
 
 
     def train_agent(self):
@@ -126,8 +125,11 @@ class A2CAgent(AbstractPolicyAgent):
                     self.optimizer.zero_grad()
 
                     policy_loss = self.policy_loss(agent = self, policy = self.policy, experience = experience)
+                    
+
                     value_loss =  self.advantage_function.value_function.loss_fn(
-                        *self.advantage_function.value_function.compute_loss_inputs(experience=experience)
+                        self.advantage_function.value_function.compute_loss_input(experience=experience),
+                        self.advantage_function.value_function.compute_loss_target(experience=experience)
                     ).mean()
                     
                     loss = policy_loss + self.values_loss_coeff* value_loss

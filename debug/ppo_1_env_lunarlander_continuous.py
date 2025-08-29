@@ -8,14 +8,14 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.value_functions.value_manager import  DoubleQWrapper, SoftDoubleQWrapper
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
-from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
+from rl_agents.value_functions.distributional_dqn_function import C51DQN, C51Loss
 from rl_agents.trainers.trainer import Trainer
 
 from rl_agents.policy_agents.ppo_agent import PPOAgent, PPOLoss

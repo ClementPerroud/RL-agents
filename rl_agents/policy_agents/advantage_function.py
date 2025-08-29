@@ -1,4 +1,4 @@
-from rl_agents.value_functions.dqn_function import DVNFunction
+from rl_agents.value_functions.dqn_function import DVN
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.agent import AbstractAgent
 from rl_agents.service import AgentService
@@ -26,7 +26,7 @@ class ReverseDatasetProxy(torch.utils.data.Dataset):
     def __getitems__(self, loc): return self.dataset[self.__len__() - torch.as_tensor(loc).long() - 1]
 
 class GAEFunction(BaseAdvantageFunction):
-    def __init__(self, value_function : DVNFunction, gamma : float, lamb : float, multi_steps=None):
+    def __init__(self, value_function : DVN, gamma : float, lamb : float):
         super().__init__()
         self.value_function = value_function
         self.lamb = lamb
@@ -39,11 +39,14 @@ class GAEFunction(BaseAdvantageFunction):
         # done: torch.Tensor,  # [B] obtained at t+multi_steps
         # truncated: torch.Tensor,  # [B] obtained at t+multi_steps
         # advantage_tp1 : torch.Tensor, # [B]
-
-        y_pred, y_true = self.value_function.compute_loss_inputs(experience=experience)    
-        delta = self.value_function.out_to_value(y_true) - self.value_function.out_to_value(y_pred)
-
         end = experience.done | experience.truncated
+
+        
+        delta = (
+            experience.reward + (1 - end.float()) * self.value_function.gamma * self.value_function.V(experience.next_state, q_target = True)
+            - self.value_function.V(experience.state)
+        )
+
 
         advantage_t = delta + self.value_function.gamma * self.lamb * (1 - end.float()) * advantage_tp1
         

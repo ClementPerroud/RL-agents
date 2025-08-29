@@ -7,40 +7,21 @@ if __name__ == "__main__":
     parentdir = os.path.dirname(currentdir)
     sys.path.insert(0, parentdir) 
 
-from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.service import AgentService
+from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
+from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
+from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
+from rl_agents.value_functions.distributional_dqn_function import C51DQN, DiscreteC51QWrapper
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
-from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
-from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.trainers.trainer import Trainer
-from rl_agents.service import AgentService
 
 import torch
 import numpy as np
 import gymnasium as gym
 
-
-class DistributionalQNN(AgentService):
-    def __init__(self, nb_atoms : int, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # We suppose observation_space and action_space to be 1D
-        self.nb_atoms = nb_atoms
-        self.nb_actions = action_space.n
-        self.module_list = torch.nn.ModuleList()
-        for i in range(2):
-            self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features= observation_space.shape[0] if i ==0 else hidden_dim, out_features= hidden_dim))
-            self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
-        self.head = torch.nn.Linear(in_features=hidden_dim, out_features=self.nb_actions * self.nb_atoms)
-    
-    def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
-        # state : [batch, nb_obs]
-        x = state
-        for module in self.module_list:
-            x = module(x)
-        return torch.reshape(self.head(x), shape = (-1, self.nb_actions, self.nb_atoms))
 
 def main():
     # gym.make("LunarLander-v3")
@@ -49,51 +30,59 @@ def main():
     action_space = env.action_space # 0 : short , 1 : long
     observation_space = env.observation_space # open, high, low, close, volume
 
-    nb_env = 1
-    memory_size = 300_000
-    nb_atoms = 51
-    gamma = 0.99
-    v_min, v_max = -250, 300
-    multi_step = 3
-    replay_memory = MultiStepReplayMemory(
-        max_length = memory_size,
-        nb_env= nb_env,
-        gamma = gamma,
-        multi_step= multi_step,
+    NB_ENV = 1
+    MEMORY_SIZE = 50_000
+    GAMMA = 0.99
+    HIDDEN_DIM = 128
+    BATCH_SIZE = 128
+    TRAIN_EVERY = 1
+    LR = 3E-4
+    TAU = 1./0.005
+
+    V_MIN, V_MAX = -300, 300
+    NB_ATOMS = 51
+
+    NOISY_STD = 0.1
+
+    replay_memory = ReplayMemory(
+        max_length = MEMORY_SIZE,
         observation_space= observation_space
     )
-    sampler= RandomSampler(replay_memory=replay_memory)
+    sampler= RandomSampler(
+        replay_memory=replay_memory
+    )
+    # sampler= PrioritizedReplaySampler(replay_memory=replay_memory, batch_size = 64, duration= 100_000),
 
-    q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
-    q_net = SoftDoubleQNNProxy(
-        q_net = q_net,
-        tau= 50
+    core_net  = torch.nn.Sequential(
+        torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
     )
-    q_net = NoisyNetProxy(q_net=q_net, std_init= 0.1)
-    q_function = DistributionalDQNFunction(
-        nb_atoms=nb_atoms, v_min=v_min, v_max=v_max,
-        net= q_net,
-        gamma = gamma,
-        multi_steps=multi_step,
-        loss_fn= DistributionalLoss(),
+    core_net = NoisyNetTransformer(std_init=NOISY_STD)(core_net)
+    q_net = DiscreteC51QWrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
+    q_manager = SoftDoubleVManager(
+        tau= TAU
     )
-    policy = ValuePolicy(q_function=q_function)
-    # policy = EspilonGreedyPolicy(
-    #     q = 1 - 1E-4,
-    #     start_epsilon= 0.9,
-    #     end_epsilon= 0.01,
-    #     action_space= action_space
-    # )
+    q_function = C51DQN(
+        net=q_net,
+        manager=q_manager,
+        gamma=GAMMA,
+        v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS
+    )
+    
+    optimizer = torch.optim.AdamW(params=q_function.parameters(), lr = LR, amsgrad=True)
+    policy = DiscreteBestQValuePolicy(q = q_function)
     agent = DQNAgent(
-        nb_env= nb_env,
+        nb_env= NB_ENV,
         policy= policy,
+        train_every= TRAIN_EVERY,
         q_function= q_function,
-        train_every= 3,
         replay_memory=replay_memory,
         sampler=sampler,
-        optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
-        batch_size=64
+        optimizer= optimizer,
+        batch_size=BATCH_SIZE,
     )
+
     agent.train()
     episodes = 1000
     for i in range(episodes):
@@ -111,7 +100,7 @@ def main():
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
             done = done or truncated
-
+            
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()
 
@@ -123,9 +112,6 @@ def main():
         episode_loss = np.array(episode_losses).mean()
         print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
         # print(episode_losses)
-
-        if i >= 150:
-            agent.plot_atoms_distributions()
 
 if __name__ == "__main__":
     import sys

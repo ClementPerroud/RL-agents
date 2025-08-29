@@ -8,12 +8,12 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
-from rl_agents.policies.value_policy import ValuePolicy
+from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
-from rl_agents.value_functions.dqn_function import DQNFunction
+from rl_agents.value_functions.dqn_function import DQN, DiscreteQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.trainers.trainer import Trainer
 
@@ -22,23 +22,6 @@ import numpy as np
 import gymnasium as gym
 
 
-class QNN(AgentService):
-    def __init__(self, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # We suppose observation_space and action_space to be 1D
-        self.module_list = torch.nn.ModuleList()
-        for i in range(2):
-            self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features= observation_space.shape[0] if i ==0 else hidden_dim, out_features= hidden_dim))
-            self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
-        self.head = torch.nn.Linear(in_features=hidden_dim, out_features=action_space.n)
-    
-    def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
-        # state : [batch, nb_obs]
-        x = state
-        for module in self.module_list:
-            x = module(x)
-        return self.head(x)
-
 def main():
     # gym.make("LunarLander-v3")
     env = gym.make("CartPole-v1")
@@ -46,16 +29,20 @@ def main():
     action_space = env.action_space # 0 : short , 1 : long
     observation_space = env.observation_space # open, high, low, close, volume
 
-    nb_env = 1
-    memory_size = 1E5
-    gamma = 0.99
-    multi_step = 3
+    NB_ENV = 1
+    MEMORY_SIZE = 50_000
+    GAMMA = 0.99
+    HIDDEN_DIM = 128
+    BATCH_SIZE = 128
+    TRAIN_EVERY = 1
+    EPS_START = 0.9
+    EPS_END = 0.05
+    EPS_DECAY = 2500
+    LR = 3E-4
+    TAU = 1./0.005
 
-    replay_memory = MultiStepReplayMemory(
-        max_length = memory_size,
-        multi_step=multi_step,
-        nb_env=nb_env,
-        gamma=gamma,
+    replay_memory = ReplayMemory(
+        max_length = MEMORY_SIZE,
         observation_space= observation_space
     )
     sampler= RandomSampler(
@@ -63,34 +50,45 @@ def main():
     )
     # sampler= PrioritizedReplaySampler(replay_memory=replay_memory, batch_size = 64, duration= 100_000),
 
-    q_net  = QNN(observation_space=observation_space, action_space= action_space, hidden_dim= 128)
-    q_net = SoftDoubleQNNProxy(
-        q_net = q_net,
-        tau= 20
+    core_net  = torch.nn.Sequential(
+        torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
     )
-    q_function = DQNFunction(
-        net= q_net,
-        gamma= gamma,
-        loss_fn= torch.nn.MSELoss(),
-        multi_steps=multi_step
+    q_net = DiscreteQWrapper(core_net=core_net, action_space=action_space)
+    q_manager = SoftDoubleVManager(
+        tau= TAU
     )
+    q_function = DQN(
+        net=q_net,
+        manager=q_manager,
+        gamma=GAMMA,
+        loss_fn=torch.nn.MSELoss(),
+    )
+
     policy = EspilonGreedyPolicy(
-        q = 1 - 4E-4,
-        start_epsilon= 0.9,
-        end_epsilon= 0.01,
+        epsilon_decay= EPS_DECAY,
+        start_epsilon= EPS_START,
+        end_epsilon= EPS_END,
         action_space= action_space,
-        policy= ValuePolicy(q_function= q_function)
+        policy= DiscreteBestQValuePolicy(q = q_function)
     )
+    
+    optimizer = torch.optim.AdamW(params=q_function.parameters(), lr = LR, amsgrad=True)
+    for name, param in q_net.named_parameters():
+        print(name, param)
+
     agent = DQNAgent(
-        nb_env= nb_env,
+        nb_env= NB_ENV,
         policy= policy,
-        train_every= 1,
+        train_every= TRAIN_EVERY,
         q_function= q_function,
         replay_memory=replay_memory,
         sampler=sampler,
-        optimizer= torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
-        batch_size=64
+        optimizer= optimizer,
+        batch_size=BATCH_SIZE
     )
+
     agent.train()
     episodes = 1000
     for i in range(episodes):
@@ -107,7 +105,8 @@ def main():
             next_state, reward, done, truncated, infos = env.step(action = int(action))
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
-
+            done = done or truncated
+            
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()
 

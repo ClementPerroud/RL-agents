@@ -8,14 +8,14 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_agents.double_q_net import  DoubleQNNProxy, SoftDoubleQNNProxy
+from rl_agents.value_functions.value_manager import  DoubleQWrapper, SoftDoubleQWrapper
 from rl_agents.policies.value_policy import ValuePolicy
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
-from rl_agents.value_functions.distributional_dqn_function import DistributionalDQNFunction, DistributionalLoss
+from rl_agents.value_functions.distributional_dqn_function import C51DQN, C51Loss
 from rl_agents.trainers.trainer import Trainer
 
 
@@ -25,7 +25,7 @@ import gymnasium as gym
 from collections import deque
 
 
-class DistributionalQNN(AgentService):
+class C51QNN(AgentService):
     def __init__(self, nb_atoms : int, observation_space : gym.spaces.Space, action_space : gym.spaces.Discrete, hidden_dim :int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # We suppose observation_space and action_space to be 1D
@@ -70,16 +70,16 @@ def main():
     sampler= RandomSampler(replay_memory=replay_memory)
 
 
-    q_net = DistributionalQNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
-    q_net = SoftDoubleQNNProxy(
+    q_net = C51QNN(nb_atoms= nb_atoms, observation_space=observation_space, action_space= action_space, hidden_dim= 128)
+    q_net = SoftDoubleQWrapper(
         q_net = q_net,
         tau= 20
     )
-    q_function = DistributionalDQNFunction(
+    q_function = C51DQN(
         nb_atoms=nb_atoms,
         v_min=v_min, v_max=v_max,
         net=q_net,
-        loss_fn = DistributionalLoss(),
+        loss_fn = C51Loss(),
         gamma= gamma,
         multi_steps= multi_step,
     )

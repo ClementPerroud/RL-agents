@@ -12,10 +12,9 @@ from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleV
 from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
-from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
+from rl_agents.replay_memory.sampler import PrioritizedReplaySampler
 from rl_agents.value_functions.distributional_dqn_function import C51DQN, DiscreteC51QWrapper
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.trainers.trainer import Trainer
 
 import torch
 import numpy as np
@@ -35,21 +34,19 @@ def main():
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
     TRAIN_EVERY = 1
-    EPS_START = 0.9
-    EPS_END = 0.05
-    EPS_DECAY = 5000
     LR = 3E-4
     TAU = 1./0.005
+    MULTI_STEP = 3
 
     V_MIN, V_MAX = -300, 300
     NB_ATOMS = 51
 
-    replay_memory = ReplayMemory(
+    replay_memory = MultiStepReplayMemory(
         max_length = MEMORY_SIZE,
-        observation_space= observation_space
-    )
-    sampler= RandomSampler(
-        replay_memory=replay_memory
+        observation_space= observation_space,
+        nb_env=NB_ENV,
+        gamma=GAMMA,
+        multi_step=MULTI_STEP
     )
     # sampler= PrioritizedReplaySampler(replay_memory=replay_memory, batch_size = 64, duration= 100_000),
 
@@ -68,15 +65,12 @@ def main():
         gamma=GAMMA,
         v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS
     )
-
-    policy = EspilonGreedyPolicy(
-        epsilon_decay= EPS_DECAY,
-        start_epsilon= EPS_START,
-        end_epsilon= EPS_END,
-        action_space= action_space,
-        policy= DiscreteBestQValuePolicy(q = q_function),
+    sampler= PrioritizedReplaySampler(
+        replay_memory=replay_memory, service=q_function, duration= 50_000
     )
-    
+
+    policy= DiscreteBestQValuePolicy(q = q_function)
+
     optimizer = torch.optim.AdamW(params=q_function.parameters(), lr = LR, amsgrad=True)
 
     agent = DQNAgent(
@@ -116,9 +110,8 @@ def main():
             episode_steps += 1
             state = next_state
 
-        epsilon = policy.epsilon
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
         # print(episode_losses)
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
-from rl_agents.value_functions.dqn_function import DQNFunction
+from rl_agents.value_functions.dqn_function import DQN
+from rl_agents.value_functions.value import Q, Trainable
 from rl_agents.policies.policy import AbstractPolicy
 from rl_agents.value_agents.value_agent import AbstractValueAgent
-from rl_agents.replay_memory.replay_memory import BaseReplayMemory
+from rl_agents.replay_memory.replay_memory import BaseReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler
-from rl_agents.utils.collates import do_nothing_collate
+from rl_agents.utils.mode import eval_mode
 import torch
 
 
@@ -12,16 +13,19 @@ class DQNAgent(AbstractValueAgent):
         self,
         nb_env: int,
         policy: AbstractPolicy,
-        q_function : DQNFunction,
+        q_function : DQN,
         train_every : int,
         replay_memory : BaseReplayMemory,
         sampler : AbstractSampler,
         batch_size : int,
-        optimizer : torch.optim.Optimizer
+        optimizer : torch.optim.Optimizer,
+        **kwargs
     ):
 
-        torch.nn.Module.__init__(self)
-        AbstractValueAgent.__init__(self, q_function=q_function, nb_env=nb_env, policy=policy)
+        assert isinstance(q_function, Q) and isinstance(q_function, Trainable), "q_function must implement Q and Trainable."
+
+        if isinstance(replay_memory, MultiStepReplayMemory): q_function.gamma **= replay_memory.multi_step
+        super().__init__(q_function=q_function, nb_env=nb_env, policy=policy, **kwargs)
         self.q_function = q_function
         self.train_every = train_every
         self.replay_memory = replay_memory
@@ -29,58 +33,48 @@ class DQNAgent(AbstractValueAgent):
         self.batch_size = batch_size
         self.optimizer = optimizer
 
-        self.dataloader = torch.utils.data.DataLoader(
-            dataset=self.replay_memory, 
-            sampler=self.sampler, 
-            collate_fn=do_nothing_collate, 
-            batch_size=batch_size
-        )
-        self._dataloader_iter = iter(self.dataloader)
-        assert isinstance(self.q_function, DQNFunction), "q_function must be from class DQNFunction, or inherit from it"
-
-
-    def sample(self, n_samples : int):
-        return self.replay_memory.sample(agent=self, batch_size=n_samples, training=False)
-
-    def store(self, **kwargs):
+    def store(self, **experience_kwargs):
         assert self.training, "Cannot store any memory during eval."
         
-        for key, value in kwargs.items():
-            kwargs[key] = torch.as_tensor(value)
-            if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
+        for key, value in experience_kwargs.items():
+            experience_kwargs[key] = torch.as_tensor(value)
+            if self.nb_env == 1: experience_kwargs[key] = experience_kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
         
-        self.replay_memory.store(agent=self, **kwargs)
-        self.sampler.store(agent=self, **kwargs)
+        indices = self.replay_memory.store(**experience_kwargs) # indices : [nb_env,]
+        if indices is not None: self.sampler.store(experience = self.replay_memory[indices],**experience_kwargs)
 
-
-    def train_step_from_dataloader(self):
-        try:
-            experience = next(self._dataloader_iter)
-        except StopIteration:
-            self._dataloader_iter = iter(self.dataloader)
-            experience = next(self._dataloader_iter)
-        
-        self.optimizer.zero_grad()
-
-        q_loss = self.q_function.get_loss(agent=self, experience=experience)
-        q_loss = self._apply_weights(q_loss, self.sampler.compute_weights_from_indices(experience.indices))
-
-        q_loss = q_loss.mean()
-        q_loss.backward()
-
-        self.optimizer.step()
-
-        return q_loss.item()
-
-            
     def train_agent(self) -> float:
         super().train_agent()
         
         if self.step % self.train_every == 0 and self.step > self.batch_size:
             # Training Q function
-            loss = self.train_step_from_dataloader()
+            loss = self.train_step()
             return loss
 
+    def train_step(self):
+        indices = self.sampler.sample(self.batch_size)
+        experience = self.replay_memory[indices]
+
+        self.optimizer.zero_grad()
+
+        loss_input = self.q_function.compute_loss_input(experience=experience)
+        with eval_mode(self):
+            loss_target = self.q_function.compute_loss_target(experience=experience)
+        loss = self.q_function.loss_fn(loss_input, loss_target)
+
+        loss = self._apply_weights(loss, self.sampler.compute_weights_from_indices(experience.indices))
+
+        loss = loss.mean()
+        loss.backward()
+
+        self.optimizer.step()
+
+        with torch.no_grad():
+            self.sampler.update_experiences(
+                agent = self, indices = experience.indices, td_errors = self.q_function.compute_td_errors(loss_input=loss_input, loss_target=loss_target)
+            )
+        return loss.item()
+        
     def _apply_weights(self, loss : torch.Tensor, weight : torch.Tensor | float |None):
         # Handle weights
         if weight is not None:

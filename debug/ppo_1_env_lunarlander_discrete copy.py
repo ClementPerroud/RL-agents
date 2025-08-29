@@ -8,11 +8,10 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.trainers.trainer import Trainer
 
 from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
 from rl_agents.policies.deep_policy import DiscreteDeepPolicy
-from rl_agents.value_functions.dqn_function import DVNFunction
+from rl_agents.value_functions.dqn_function import DVN
 from rl_agents.policy_agents.advantage_function import GAEFunction
 
 import torch
@@ -71,7 +70,7 @@ def main():
     policy = DiscreteDeepPolicy(
         policy_net= policy_net
     )
-    value_function = DVNFunction(net = value_net, gamma= gamma, loss_fn=torch.nn.MSELoss())
+    value_function = DVN(net = value_net, gamma= gamma, loss_fn=torch.nn.MSELoss())
     advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
     policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.01)
     agent = A2CAgent(

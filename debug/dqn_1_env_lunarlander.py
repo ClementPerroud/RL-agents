@@ -13,7 +13,7 @@ from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
-from rl_agents.value_functions.distributional_dqn_function import C51DQN, DiscreteC51QWrapper
+from rl_agents.value_functions.dqn_function import DQN, DiscreteQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.trainers.trainer import Trainer
 
@@ -41,9 +41,6 @@ def main():
     LR = 3E-4
     TAU = 1./0.005
 
-    V_MIN, V_MAX = -300, 300
-    NB_ATOMS = 51
-
     replay_memory = ReplayMemory(
         max_length = MEMORY_SIZE,
         observation_space= observation_space
@@ -58,15 +55,15 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
     )
-    q_net = DiscreteC51QWrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
+    q_net = DiscreteQWrapper(core_net=core_net, action_space=action_space)
     q_manager = SoftDoubleVManager(
         tau= TAU
     )
-    q_function = C51DQN(
+    q_function = DQN(
         net=q_net,
         manager=q_manager,
         gamma=GAMMA,
-        v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS
+        loss_fn=torch.nn.SmoothL1Loss(),
     )
 
     policy = EspilonGreedyPolicy(
@@ -74,10 +71,12 @@ def main():
         start_epsilon= EPS_START,
         end_epsilon= EPS_END,
         action_space= action_space,
-        policy= DiscreteBestQValuePolicy(q = q_function),
+        policy= DiscreteBestQValuePolicy(q = q_function)
     )
     
     optimizer = torch.optim.AdamW(params=q_function.parameters(), lr = LR, amsgrad=True)
+    for name, param in q_net.named_parameters():
+        print(name, param)
 
     agent = DQNAgent(
         nb_env= NB_ENV,
@@ -87,7 +86,7 @@ def main():
         replay_memory=replay_memory,
         sampler=sampler,
         optimizer= optimizer,
-        batch_size=BATCH_SIZE,
+        batch_size=BATCH_SIZE
     )
 
     agent.train()

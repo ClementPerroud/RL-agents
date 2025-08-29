@@ -13,9 +13,13 @@ from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
-from rl_agents.value_functions.distributional_dqn_function import C51DQN, DiscreteC51QWrapper
+from rl_agents.value_functions.dqn_function import DQN, DiscreteQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.trainers.trainer import Trainer
+
+from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
+from rl_agents.policies.deep_policy import DiscreteDeepPolicy
+from rl_agents.value_functions.dqn_function import DVN
+from rl_agents.policy_agents.advantage_function import GAEFunction
 
 import torch
 import numpy as np
@@ -24,74 +28,76 @@ import gymnasium as gym
 
 def main():
     # gym.make("LunarLander-v3")
-    env = gym.make("LunarLander-v3")
+    env = gym.make("CartPole-v1")
 
     action_space = env.action_space # 0 : short , 1 : long
     observation_space = env.observation_space # open, high, low, close, volume
 
     NB_ENV = 1
     MEMORY_SIZE = 50_000
-    GAMMA = 0.99
+    EPSILON = 0.2
+    ROLLOUT_PERIOD = 256
+    EPOCH = 5
+    ENTROPY_COEFF = 0.001
+    VALUE_COEFF = 0.1
+    GAMMA = 0.98
+    LAMBDA = 1
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
-    TRAIN_EVERY = 1
-    EPS_START = 0.9
-    EPS_END = 0.05
-    EPS_DECAY = 5000
-    LR = 3E-4
-    TAU = 1./0.005
 
-    V_MIN, V_MAX = -300, 300
-    NB_ATOMS = 51
+    TAU = 500
 
-    replay_memory = ReplayMemory(
-        max_length = MEMORY_SIZE,
-        observation_space= observation_space
-    )
-    sampler= RandomSampler(
-        replay_memory=replay_memory
-    )
-    # sampler= PrioritizedReplaySampler(replay_memory=replay_memory, batch_size = 64, duration= 100_000),
 
     core_net  = torch.nn.Sequential(
         torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
     )
-    q_net = DiscreteC51QWrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
+
+    q_net = DiscreteQWrapper(
+        core_net=torch.nn.Sequential(
+            core_net,
+            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
+        ),
+        action_space=action_space
+    )
     q_manager = SoftDoubleVManager(
         tau= TAU
     )
-    q_function = C51DQN(
+    q_function = DQN(
         net=q_net,
         manager=q_manager,
         gamma=GAMMA,
-        v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS
     )
 
-    policy = EspilonGreedyPolicy(
-        epsilon_decay= EPS_DECAY,
-        start_epsilon= EPS_START,
-        end_epsilon= EPS_END,
-        action_space= action_space,
-        policy= DiscreteBestQValuePolicy(q = q_function),
+    policy = DiscreteDeepPolicy(
+        policy_net= torch.nn.Sequential(
+            core_net,
+            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+            torch.nn.Linear(HIDDEN_DIM, action_space.n),
+            torch.nn.Softmax(dim = -1)
+        )
     )
-    
-    optimizer = torch.optim.AdamW(params=q_function.parameters(), lr = LR, amsgrad=True)
-
-    agent = DQNAgent(
-        nb_env= NB_ENV,
-        policy= policy,
-        train_every= TRAIN_EVERY,
-        q_function= q_function,
-        replay_memory=replay_memory,
-        sampler=sampler,
-        optimizer= optimizer,
+    advantage_function = GAEFunction(
+        value_function=q_function, gamma=GAMMA, lamb=LAMBDA
+    )
+    agent = A2CAgent(
+        nb_env=NB_ENV,
+        policy = policy,
+        advantage_function=advantage_function,
+        policy_loss=PPOLoss(epsilon = EPSILON, entropy_loss_coeff=ENTROPY_COEFF),
+        rollout_period=ROLLOUT_PERIOD,
+        epoch_per_rollout=EPOCH,
         batch_size=BATCH_SIZE,
+        values_loss_coeff=VALUE_COEFF,
+        observation_space=observation_space,
+        action_space=action_space
     )
 
     agent.train()
-    episodes = 1000
+    episodes = 10000
     for i in range(episodes):
         episode_rewards = 0
         episode_losses = []
@@ -102,13 +108,12 @@ def main():
         state, infos = env.reset()
         
         while not truncated and not done:
-            action = agent.pick_action(state= state)
+            action, log_prob = agent.pick_action(state= state)
             next_state, reward, done, truncated, infos = env.step(action = int(action))
             episode_rewards += reward
             # print(state, action, reward, next_state, done, truncated)
-            done = done or truncated
             
-            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
+            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated, log_prob=log_prob)
             loss = agent.train_agent()
 
             if loss is not None: episode_losses.append(loss)
@@ -116,9 +121,8 @@ def main():
             episode_steps += 1
             state = next_state
 
-        epsilon = policy.epsilon
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e}| Agent Step : {agent.step}")
         # print(episode_losses)
 
 if __name__ == "__main__":

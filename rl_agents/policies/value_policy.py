@@ -1,20 +1,19 @@
 from rl_agents.policies.policy import AbstractPolicy
-from rl_agents.agent import AbstractAgent
-from rl_agents.value_functions.q_function import AbstractQFunction
+from rl_agents.value_functions.value import Q
 import numpy as np
 import torch
 
 
-# Use for testing purpose
-class ValuePolicy(
-    AbstractPolicy,
-):
-    def __init__(self, q_function : AbstractQFunction):
-        super().__init__()
-        self.q_function = q_function
 
-    def pick_action(self, agent: AbstractAgent, state: torch.Tensor):
+# Use for testing purpose
+class DiscreteBestQValuePolicy(AbstractPolicy):
+    def __init__(self, q : Q):
+        super().__init__()
+        assert isinstance(q, Q), "q must implement Q. Please use QWrapper or create a custom Q"
+        self.q_per_action = q.Q_per_action 
+
+    def pick_action(self, state: torch.Tensor, **kwargs):
         return torch.argmax(
-            self.q_function.Q(state = torch.as_tensor(state)), 
+            self.q_per_action(state = torch.as_tensor(state)), 
             dim=-1
-        )
+        ).long()

@@ -8,14 +8,14 @@ if TYPE_CHECKING:
 
 
 class AgentService(torch.nn.Module, ABC):
-    def __init__(self, *args, **kwargs):
-        torch.nn.Module.__init__(self, *args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 
-    def __update__(self, agent: "AbstractAgent"):
-        self.update(agent=agent)
+    def __update__(self, **kwargs):
+        self.update(**kwargs)
         for element in self.children():
             if isinstance(element, AgentService):
-                element.__update__(agent=self)
+                element.__update__(**kwargs)
         
-    def update(self, agent: "AbstractAgent"): ...
+    def update(self, **kwargs): ...
