@@ -18,14 +18,14 @@ class VWrapper(V):
 
     def V(self, state : torch.Tensor) -> torch.Tensor:
         x = self.core_net(state)
-        return self.head(x)
+        return self.head(x).squeeze(1)
 
 
 class DVN(V, Trainable):
     def __init__(self,
             net : AgentService,
             gamma : float,
-            loss_fn : torch.nn.modules.loss._Loss,
+            loss_fn : torch.nn.modules.loss._Loss = torch.nn.SmoothL1Loss(),
             manager : VManager = VManager(),
             **kwargs
         ):
@@ -37,9 +37,9 @@ class DVN(V, Trainable):
         self.loss_fn = loss_fn
         loss_fn.reduction= "none"
 
-    def V(self, state: torch.Tensor, target = False) -> torch.Tensor:
+    def V(self, state: torch.Tensor, target = False, **kwargs) -> torch.Tensor:
         # state : [batch/nb_env, state_shape ...]
-        return self.manager.get_net(target=target).forward(state)
+        return self.manager.get_net(target=target).V(state)
         # Return Q Values : [batch/nb_env]
 
     # Loss config

@@ -16,7 +16,6 @@ from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayM
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_functions.distributional_dqn_function import C51DQN, DiscreteC51QWrapper
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.trainers.trainer import Trainer
 
 import torch
 import numpy as np

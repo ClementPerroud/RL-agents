@@ -22,15 +22,17 @@ class ReverseDatasetProxy(torch.utils.data.Dataset):
         self.dataset = dataset
 
     def __len__(self): return self.dataset.__len__()
-    def __getitem__(self, loc): return self.dataset[self.__len__() - loc - 1]
+    def __getitem__(self, loc): return self.dataset[self.__len__() - torch.as_tensor(loc).long() - 1]
     def __getitems__(self, loc): return self.dataset[self.__len__() - torch.as_tensor(loc).long() - 1]
 
 class GAEFunction(BaseAdvantageFunction):
-    def __init__(self, value_function : DVN, gamma : float, lamb : float):
+    def __init__(self, value_function : DVN, lamb : float, normalize_advantage : bool):
         super().__init__()
         self.value_function = value_function
         self.lamb = lamb
+        self.normalize_advantage = normalize_advantage
 
+    @torch.no_grad()
     def _gae(self, experience : ExperienceSample, advantage_tp1 : torch.Tensor) -> torch.Tensor:
         # state: torch.Tensor,  # [B, state_shape ...] obtained at t
         # action: torch.Tensor,  # [B] obtained at t+multi_steps
@@ -41,35 +43,44 @@ class GAEFunction(BaseAdvantageFunction):
         # advantage_tp1 : torch.Tensor, # [B]
         end = experience.done | experience.truncated
 
-        
+        value_t = self.value_function.V(experience.state)
         delta = (
-            experience.reward + (1 - end.float()) * self.value_function.gamma * self.value_function.V(experience.next_state, q_target = True)
-            - self.value_function.V(experience.state)
+            experience.reward + (1 - end.float()) * self.value_function.gamma * self.value_function.V(experience.next_state)
+            - value_t
         )
 
-
         advantage_t = delta + self.value_function.gamma * self.lamb * (1 - end.float()) * advantage_tp1
-        
+        return_t = advantage_t + value_t
         # self._state_tp1 = state
-        return advantage_t
+        return advantage_t, return_t
     
-    @torch.no_grad
+    @torch.no_grad()
     def compute(self, agent : AbstractPolicyAgent):
         assert isinstance(agent, AbstractPolicyAgent), "Advantage Functions can only be used with PolicyAgents"
-        if "advantage" not in agent.rollout_memory.names: 
+        reserved_dataset = ReverseDatasetProxy(dataset=agent.rollout_memory)
+
+        if "advantage" not in agent.rollout_memory.names:
             agent.rollout_memory.add_field("advantage", (), torch.float32, default_value=0)
+            agent.rollout_memory.add_field("_return", (), torch.float32, default_value=0)
+            agent.rollout_memory.add_field("value", (), torch.float32, default_value=0)
+
+            # target_shape = self.value_function.compute_loss_target(experience=reserved_dataset[[0]]).shape
+
 
         dataloader = torch.utils.data.DataLoader(
-            dataset=ReverseDatasetProxy(dataset=agent.rollout_memory), # Reserving the dataset so we go through the data backwards.
+            dataset=reserved_dataset, # Reserving the dataset so we go through the data backwards.
             batch_size = agent.nb_env,
-            shuffle= False, in_order=True,
+            shuffle= False,
             collate_fn=do_nothing_collate
         )
 
         advantage = torch.zeros(size=(agent.nb_env,))
         for experience in dataloader:
             experience : ExperienceSample
-            advantage = self._gae(experience=experience, advantage_tp1 = advantage)
+            advantage, _return = self._gae(experience=experience, advantage_tp1 = advantage)
             agent.rollout_memory["advantage", experience.indices] = advantage
+            agent.rollout_memory["_return", experience.indices] = advantage
+            agent.rollout_memory["value", experience.indices] = self.value_function.V(experience.state)
         
-        agent.rollout_memory
+        advantages = agent.rollout_memory["advantage"]
+        agent.rollout_memory["advantage"] = (advantages - torch.mean(advantages))/(torch.std(advantages) + 1E-8)

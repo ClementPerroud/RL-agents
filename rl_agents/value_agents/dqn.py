@@ -58,7 +58,7 @@ class DQNAgent(AbstractValueAgent):
         self.optimizer.zero_grad()
 
         loss_input = self.q_function.compute_loss_input(experience=experience)
-        with eval_mode(self):
+        with eval_mode(self), torch.no_grad():
             loss_target = self.q_function.compute_loss_target(experience=experience)
         loss = self.q_function.loss_fn(loss_input, loss_target)
 

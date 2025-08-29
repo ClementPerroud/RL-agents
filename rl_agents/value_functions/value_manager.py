@@ -8,7 +8,7 @@ from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from rl_agents.value_functions.dqn_function import V, V
+    from rl_agents.value_functions.dqn_function import V
 
 class VManager(AgentService):
     def set_net(self, net :"V"): self.net = net

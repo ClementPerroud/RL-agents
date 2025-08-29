@@ -15,10 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.agent import AbstractAgent
 
-import gymnasium as gym
-gym.Env()
 
-torch.utils.data.TensorDataset
 class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
     @abstractmethod
     def store(self, agent: "AbstractAgent", **kwargs) -> tuple[torch.Tensor, object]:...
@@ -141,7 +138,7 @@ class BaseReplayMemory(AbstractReplayMemory):
         nb_env = next(iter(kwargs.values())).size(0)
 
         # Compute indices
-        if i+nb_env <= self.max_length: indices = torch.arange(i,i+nb_env)
+        if i+nb_env < self.max_length: indices = torch.arange(i,i+nb_env)
         else:
             n_end = self.max_length - i
             n_start = nb_env - n_end 
