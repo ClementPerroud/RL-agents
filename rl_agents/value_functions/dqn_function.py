@@ -1,6 +1,6 @@
 from rl_agents.value_functions.dvn_function import DVN
 from rl_agents.policies.policy import AbstractPolicy
-from rl_agents.replay_memory.replay_memory import AbstractReplayMemory, ExperienceSample, Experience
+from rl_agents.replay_memory.replay_memory import ReplayMemory, ExperienceSample, Experience
 from rl_agents.service import AgentService
 from rl_agents.value_functions.value import Q, V, Trainable
 from rl_agents.value_functions.value_manager import VManager
@@ -80,6 +80,6 @@ class DQN(DVN, Q, V, Trainable):
         return self.Q(experience.state, experience.action)
     
     @torch.no_grad()
-    def compute_loss_target(self, experience : Experience) -> None: 
+    def compute_loss_target(self, experience : Experience) -> torch.Tensor:
         return experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state, q_target = True)
 

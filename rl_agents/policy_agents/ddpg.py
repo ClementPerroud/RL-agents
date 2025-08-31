@@ -62,43 +62,26 @@ class PPOLoss(AgentService):
         loss =  - policy_loss + value_loss*self.values_loss_coeff - self.entropy_loss_coeff * entropy_loss
         return loss
 
-class A2CAgent(AbstractPolicyAgent):
+class A2CAgent[A, C, M](AbstractPolicyAgent):
     """Advantage Actor-Critic Agent"""
     def __init__(self,
             nb_env : int,
-            policy : AbstractStochasticPolicy,
-
-            advantage_function : BaseAdvantageFunction,
-            policy_loss : PPOLoss,
-
-            rollout_period : int,
-            epoch_per_rollout : int,
-            batch_size : int,
+            actor : A,
+            critic : C,
+            memory : M,
 
             observation_space : gym.spaces.Space,
             action_space : gym.spaces.Space,
-
-            max_grad_norm: float = None
-
         ):
-        super().__init__(nb_env = nb_env, policy = policy)
-        assert isinstance(self.policy, AbstractStochasticPolicy), "policy must be a StochasticPolicy."
-        self.policy : AbstractStochasticPolicy
+        super().__init__(nb_env = nb_env, policy = actor)
+        self.actor = actor
+        self.critic = critic
+        self.memory = memory
 
-        self.advantage_function = advantage_function
+        self.observation_space = observation_space
+        self.action_space = action_space
+        
 
-        self.rollout_period = rollout_period
-        self.epoch_per_rollout = epoch_per_rollout
-        self.rollout_memory = RolloutMemory(max_length=rollout_period * nb_env, observation_space=observation_space, action_space=action_space)
-        self.policy_loss = policy_loss
-
-        self.batch_size = batch_size
-
-        self.optimizer = torch.optim.Adam(
-            params=self.parameters(),
-            lr = 3E-4
-        )
-        self.max_grad_norm = max_grad_norm
 
 
     
@@ -135,7 +118,7 @@ class A2CAgent(AbstractPolicyAgent):
                     loss.backward()
                     if self.max_grad_norm is not None : torch.nn.utils.clip_grad_norm_(self.parameters(), self.max_grad_norm)
                     self.optimizer.step()
-                    
+
                     losses.append(loss.item())
             
             # 3 - After training

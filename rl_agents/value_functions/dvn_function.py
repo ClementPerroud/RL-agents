@@ -1,4 +1,4 @@
-from rl_agents.replay_memory.replay_memory import AbstractReplayMemory, ExperienceSample, Experience
+from rl_agents.replay_memory.replay_memory import ReplayMemory, ExperienceSample, Experience
 from rl_agents.service import AgentService
 from rl_agents.value_functions.value import V, Trainable
 from rl_agents.value_functions.value_manager import VManager

@@ -67,7 +67,7 @@ class GAEFunction(BaseAdvantageFunction):
             # target_shape = self.value_function.compute_loss_target(experience=reserved_dataset[[0]]).shape
 
 
-
+        assert len(reserved_dataset) % agent.nb_env == 0, "The number of experiences must be divisible by the number of running environments."
         batches = torch.arange(0, len(reserved_dataset)).reshape(shape = (-1, agent.nb_env))
         advantage = torch.zeros(size=(agent.nb_env,))
         for i in range(batches.size(0)):

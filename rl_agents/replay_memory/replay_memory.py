@@ -1,8 +1,6 @@
-from rl_agents.replay_memory.sampler import AbstractSampler, RandomSampler
-from rl_agents.service import AgentService
-
+from rl_agents.replay_memory.memory import EditableMemory, MemoryField
 from abc import ABC, abstractmethod
-from collections import deque
+from collections import deque, namedtuple
 import torch
 import numpy as np
 from gymnasium.spaces import Space, Box
@@ -10,30 +8,8 @@ from functools import partial
 import warnings
 from dataclasses import dataclass, make_dataclass, asdict, fields
 
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from rl_agents.agent import AbstractAgent
-
-
-class AbstractReplayMemory(torch.utils.data.Dataset, AgentService, ABC):
-    @abstractmethod
-    def store(self, agent: "AbstractAgent", **kwargs) -> tuple[torch.Tensor, object]:...
-
-    @abstractmethod
-    def reset(self): ...
-
-    _max_length = None
-    @property
-    def max_length(self):
-        if self._max_length is None: raise NotImplementedError(f"Please implement attribute max_length in {self.__class__.__name__}")
-        return self._max_length
-
-    @max_length.setter
-    def max_length(self, val): self._max_length = val
-
-
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True, slots=True, frozen=True)
 class Experience:
     def __getattr__(self, item):
         # Called only if attribute not found normally
@@ -42,7 +18,7 @@ class Experience:
             f"Available attributes: {[field.name for field in fields(self)]}"
         )
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(kw_only=True, slots=True, frozen=True)
 class ExperienceSample:
     indices : torch.Tensor
     def __getattr__(self, item):
@@ -52,11 +28,11 @@ class ExperienceSample:
             f"Available attributes: {[field.name for field in fields(self)]}"
         )
 
-class BaseReplayMemory(AbstractReplayMemory):
+class BaseReplayMemory(torch.nn.Module, EditableMemory[Experience]):
     def __init__(
         self,
         max_length: int,
-        fields: list[tuple[str, tuple, torch.dtype]],
+        fields: list[MemoryField],
         device: torch.DeviceObjType = None,
         **kwargs
     ):
@@ -64,11 +40,17 @@ class BaseReplayMemory(AbstractReplayMemory):
         self.max_length = int(max_length)
         self.device = device
 
+
+        self.fields  = []
+        for field in fields:
+            if isinstance(field, MemoryField): pass
+            if isinstance(field, tuple): field = MemoryField(*field)
+            else: raise ValueError(f"Invalid type of field {type(field)}. Must be a tuple or MemoryField.")
+            self.fields.append(field)
         # Unpack fields
-        self.fields  = fields
         self._mandatory_fields = set()
         self.names, self.sizes, self.dtypes, self.default_values = [], {}, {}, {}
-        for field in fields: self._set_up_field(*field) # Field : (name, shape, dtype, (optional) default_value)
+        for field in self.fields: self._set_up_field(*field) # Field : (name, shape, dtype, (optional) default_value)
         self._generate_dataclasses()
         self.i = 0
 
@@ -83,6 +65,7 @@ class BaseReplayMemory(AbstractReplayMemory):
             bases=(Experience,),
             kw_only=True,
             slots=True,
+            frozen=True
         )
         self.sample_dataclass_generator = make_dataclass(
             f"ExperienceSample{self.__class__.__name__}",
@@ -90,6 +73,7 @@ class BaseReplayMemory(AbstractReplayMemory):
             bases=(ExperienceSample,),
             kw_only=True,
             slots=True,
+            frozen=True
         )
 
     def _set_up_field(self, name : str, shape : tuple[int], dtype : None, default_value = None):
@@ -99,22 +83,31 @@ class BaseReplayMemory(AbstractReplayMemory):
         self.dtypes[name] = dtype
         if default_value is not None: self.default_values[name] = default_value
         else: self._mandatory_fields.add(name)
-        self._reset_tensor(name=name)
+        self._set_tensor(name=name)
 
     def add_field(self, name : str, shape : tuple[int], dtype : None, default_value = None):
         self._set_up_field(name=name, shape=shape, dtype=dtype, default_value=default_value)
         self._generate_dataclasses()
-
+    
+    def remove_field(self, name : str):
+        self.names.remove(name)
+        self.sizes.pop(name)
+        self.dtypes.pop(name)
+        self.default_values.pop(name, 0)
+        if name in self._mandatory_fields: self._mandatory_fields.remove(name)
+        self.__delattr__(name="memory_{name}")
+        self._generate_dataclasses()
+        
 
     def reset(self, name = None):
         for name in self.names: 
-            self._reset_tensor(name = name)
+            buf : torch.Tensor = getattr(self, f"memory_{name}")
+            fill_value = self.default_values.get(name, 0)
+            buf.fill_(fill_value)
         self.i: int = 0
 
-    def _reset_tensor(self, name : str):
-        fill_value = 0
-        if name in self.default_values:fill_value=self.default_values[name]
-
+    def _set_tensor(self, name : str):
+        fill_value = self.default_values.get(name, 0)
         self.register_buffer(
             name=f"memory_{name}",
             tensor=torch.full(size = self.sizes[name], fill_value=fill_value, dtype = self.dtypes[name]),
@@ -138,11 +131,11 @@ class BaseReplayMemory(AbstractReplayMemory):
         nb_env = next(iter(kwargs.values())).size(0)
 
         # Compute indices
-        if i+nb_env < self.max_length: indices = torch.arange(i,i+nb_env)
+        if i+nb_env <= self.max_length: indices = torch.arange(i,i+nb_env)
         else:
             n_end = self.max_length - i
             n_start = nb_env - n_end 
-            indices = torch.cat([torch.arange(i,i+nb_env) + torch.arange(0,n_start)])
+            indices = torch.cat([torch.arange(i,i+nb_env), torch.arange(0,n_start)])
         indices = indices.long()
 
         for name, val in kwargs.items():
@@ -207,12 +200,12 @@ class ReplayMemory(BaseReplayMemory):
         super().__init__(
             max_length=max_length,
             fields=[
-                ("state",       self.observation_space.shape,   torch.float32),
-                ("action",      (),                             torch.long),
-                ("next_state",  self.observation_space.shape,   torch.float32),
-                ("reward",      (),                             torch.float32),
-                ("done",        (),                             torch.bool),
-                ("truncated",   (),                             torch.bool),
+                MemoryField("state",       self.observation_space.shape,   torch.float32),
+                MemoryField("action",      (),                             torch.long),
+                MemoryField("next_state",  self.observation_space.shape,   torch.float32),
+                MemoryField("reward",      (),                             torch.float32),
+                MemoryField("done",        (),                             torch.bool),
+                MemoryField("truncated",   (),                             torch.bool),
             ],
             device=device,
         )
@@ -244,12 +237,12 @@ class MultiStepReplayMemory(BaseReplayMemory):
         super().__init__(
             max_length=max_length,
             fields=[
-                ("state",       observation_space.shape,    torch.float32),
-                ("action",      (),                         torch.long),
-                ("next_state",  observation_space.shape,    torch.float32),
-                ("reward",      (),                         torch.float32),
-                ("done",        (),                         torch.bool),
-                ("truncated",   (),                         torch.bool),
+                MemoryField("state",       observation_space.shape,    torch.float32),
+                MemoryField("action",      (),                         torch.long),
+                MemoryField("next_state",  observation_space.shape,    torch.float32),
+                MemoryField("reward",      (),                         torch.float32),
+                MemoryField("done",        (),                         torch.bool),
+                MemoryField("truncated",   (),                         torch.bool),
             ],
             device=device,
         )

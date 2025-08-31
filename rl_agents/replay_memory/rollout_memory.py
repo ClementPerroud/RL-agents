@@ -1,5 +1,6 @@
 from rl_agents.replay_memory.replay_memory import BaseReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler, RandomSampler
+from rl_agents.replay_memory.replay_memory import MemoryField
 
 import torch
 from gymnasium.spaces import Space, Box
@@ -20,13 +21,13 @@ class RolloutMemory(BaseReplayMemory):
         super().__init__(
             max_length=max_length,
             fields=[
-                ("state",        observation_space.shape, torch.float32),
-                ("action",       action_space.shape,      torch.float32),
-                ("next_state",   observation_space.shape, torch.float32),
-                ("reward",       (),                      torch.float32),
-                ("done",         (),                      torch.bool),
-                ("truncated",    (),                      torch.bool),
-                ("log_prob", (),                      torch.float32),
+                MemoryField("state",        observation_space.shape, torch.float32),
+                MemoryField("action",       action_space.shape,      torch.float32),
+                MemoryField("next_state",   observation_space.shape, torch.float32),
+                MemoryField("reward",       (),                      torch.float32),
+                MemoryField("done",         (),                      torch.bool),
+                MemoryField("truncated",    (),                      torch.bool),
+                MemoryField("log_prob", (),                      torch.float32),
             ],
             device=device,
         )

@@ -14,6 +14,6 @@ class DiscreteBestQValuePolicy(AbstractPolicy):
 
     def pick_action(self, state: torch.Tensor, **kwargs):
         return torch.argmax(
-            self.q_per_action(state = torch.as_tensor(state)), 
+            self.q_per_action(state = state), 
             dim=-1
         ).long()

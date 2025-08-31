@@ -55,16 +55,16 @@ class DiscreteStochasticPolicy(AbstractStochasticPolicy):
         # shape [batch]
 
     def entropy_loss(self, action_probs : torch.Tensor):
-        return torch.distributions.Categorical(probs = action_probs).entropy().mean()
+        return torch.distributions.Categorical(probs = action_probs).entropy()
 
 
 
 class ContinuousStochasticPolicy(AbstractStochasticPolicy):
     def __init__(self, action_space : gym.spaces.Box, policy_net, *args, **kwargs):
-        self.low = torch.as_tensor(action_space.low, dtype = torch.float32)
-        self.high = torch.as_tensor(action_space.high, dtype = torch.float32)
-        self.scale = (self.high - self.low)/2
-        self.loc = (self.high + self.low)/2
+        self.register_buffer("low",   torch.as_tensor(action_space.low, dtype = torch.float32))
+        self.register_buffer("high",  torch.as_tensor(action_space.high, dtype = torch.float32))
+        self.register_buffer("scale", (self.high - self.low) / 2)
+        self.register_buffer("loc",   (self.high + self.low) / 2)
 
         super().__init__(policy_net=policy_net, *args, **kwargs)
 
@@ -118,4 +118,4 @@ class ContinuousStochasticPolicy(AbstractStochasticPolicy):
         # shape [batch]
 
     def entropy_loss(self, mean : torch.Tensor, log_std : torch.Tensor):
-        return torch.distributions.Normal(mean, log_std.exp()).entropy().mean()
+        return torch.distributions.Normal(mean, log_std.exp()).entropy()
