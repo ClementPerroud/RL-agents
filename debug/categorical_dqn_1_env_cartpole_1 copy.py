@@ -9,14 +9,13 @@ if __name__ == "__main__":
 
 from rl_agents.service import AgentService
 from rl_agents.value_functions.value_manager import  SoftDoubleVManager
-from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.value_functions.distributional_dqn_function import C51DQN, C51Loss, DiscreteC51QWrapper
+from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, DiscreteC51QWrapper
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
-from rl_agents.trainers.trainer import Trainer
 
 import torch
 import numpy as np

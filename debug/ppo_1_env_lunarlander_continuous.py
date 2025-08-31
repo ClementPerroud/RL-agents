@@ -8,150 +8,131 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.value_manager import  DoubleQWrapper, SoftDoubleQWrapper
-from rl_agents.policies.value_policy import ValuePolicy
-from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
+from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
+from rl_agents.value_functions.dqn_function import DQN, ContinuousQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.value_agents.noisy_net_strategy import NoisyNetProxy
-from rl_agents.value_functions.distributional_dqn_function import C51DQN, C51Loss
-from rl_agents.trainers.trainer import Trainer
 
-from rl_agents.policy_agents.ppo_agent import PPOAgent, PPOLoss
-from rl_agents.policies.deep_policy import ContinuousDeepPolicy
-from rl_agents.value_functions.dqn_function import DVNFunction
+from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
+from rl_agents.policies.stochastic_policy import ContinuousDeepPolicy
+from rl_agents.value_functions.dvn_function import DVN, VWrapper
 from rl_agents.policy_agents.advantage_function import GAEFunction
-from rl_agents.replay_memory.rollout_memory import RolloutMemory
 
 import torch
 import numpy as np
 import gymnasium as gym
-from collections import deque
 
-
-class MainNet(AgentService):
-    def __init__(self, observation_space : gym.spaces.Space, hidden_dim :int, *args, **kwargs):
+class PolicyNet(torch.nn.Module):
+    def __init__(self, observation_space, action_space, hidden_dim, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # We suppose observation_space and action_space to be 1D
-        self.module_list = torch.nn.ModuleList()
-        for i in range(2):
-            self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features= observation_space.shape[0] if i ==0 else hidden_dim, out_features= hidden_dim))
-            self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
-    
-    def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
-        # state : [batch, nb_obs]
-        x = state
-        for module in self.module_list:
-            x = module(x)
+        self.main_net = torch.nn.Sequential(
+            torch.nn.Linear(observation_space.shape[0], hidden_dim), torch.nn.ReLU(),
+            torch.nn.Linear(hidden_dim, hidden_dim), torch.nn.ReLU(),
+            torch.nn.Linear(hidden_dim, hidden_dim), torch.nn.ReLU()
+        )
+        self.mean_linear = torch.nn.Linear(hidden_dim, action_space.shape[0])
+        self.std_linear = torch.nn.Linear(hidden_dim, action_space.shape[0])
         
-        # output : [batch, hidden_dim]
-        return x
-class PolicyNet(AgentService):
-    def __init__(self, main_net : torch.nn.Module, hidden_dim : int, n_actions : int, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # We suppose observation_space and action_space to be 1D
-        self.main_net = main_net
-        self.hidden_net = hidden_dim
-        self.module_list = torch.nn.ModuleList()
-        for i in range(2):
-            self.module_list.add_module(f"lin_{i}", torch.nn.Linear(in_features=hidden_dim, out_features= hidden_dim))
-            self.module_list.add_module(f"act_{i}", torch.nn.ReLU())
-        self.head_mean = torch.nn.Linear(in_features=hidden_dim, out_features=n_actions)
-        self.head_std = torch.nn.Linear(in_features=hidden_dim, out_features=n_actions)
-        
-    
-    def forward(self, state : torch.Tensor, **kwargs) -> torch.Tensor:
-        # state : [batch, nb_obs]
+    def forward(self, state):
         x = self.main_net(state)
-        for module in self.module_list:
-            x = module(x)
-
-        return self.head_mean(x), torch.clamp(self.head_std(x), min = -20, max = 2)
-    
-class SequentialNet(torch.nn.Sequential, AgentService):
-    def forward(self, *args, **kwargs):
-        return super().forward(*args, **kwargs)
+        return self.mean_linear(x), self.std_linear(x)
 
 def main():
-    nb_env = 1
-    gamma = 0.99
-    lamb = 0.95
-    hidden_dim = 64
-    epsilon = 0.2
-
-    env = gym.make("LunarLander-v3", continuous = True)
+    # gym.make("LunarLander-v3")
+    env = gym.make("LunarLander-v3", continuous=True)
 
     action_space = env.action_space # 0 : short , 1 : long
     observation_space = env.observation_space # open, high, low, close, volume
 
-    main_net = MainNet(observation_space=observation_space, hidden_dim=hidden_dim)
-    policy_net = PolicyNet(
-        main_net=main_net,
-        hidden_dim=64,
-        n_actions= 2
+    NB_ENV = 1
+    EPSILON = 0.2
+    ROLLOUT_PERIOD = 2048
+    EPOCH = 5
+    ENTROPY_COEFF = 0.01
+    VALUE_COEFF = 0.5
+    GAMMA = 0.99
+    LAMBDA = 0.95
+    HIDDEN_DIM = 128
+    BATCH_SIZE = 128
+
+    CLIP_VALUE_LOSS = True
+    NORMALIZE_ADV = True
+    MAX_GRAD_NORM = None
+
+
+    v_core_net = torch.nn.Sequential(
+        torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
     )
-    value_net = SequentialNet(
-        main_net,
-        torch.nn.Linear(hidden_dim, hidden_dim),
-        torch.nn.ReLU(),
-        torch.nn.Linear(hidden_dim, 1)
+    policy_net = PolicyNet(observation_space=observation_space, action_space=action_space, hidden_dim=HIDDEN_DIM)
+
+    v_net = VWrapper(core_net=v_core_net)
+
+    v_function = DVN(
+        net=v_net,
+        gamma=GAMMA,
     )
+
     policy = ContinuousDeepPolicy(
         policy_net= policy_net,
-        action_space= action_space
+        action_space= action_space,
     )
-    value_function = DVNFunction(net = value_net, gamma= gamma, trainer= Trainer(loss_fn=torch.nn.MSELoss()))
-    advantage_function = GAEFunction(value_function=value_function, gamma=gamma, lamb=lamb)
-    policy_loss = PPOLoss(epsilon=epsilon, entropy_loss_coeff=0.005)
-    agent = PPOAgent(
-        nb_env=nb_env,
-        policy=policy,
-        value_function=value_function,
+
+    advantage_function = GAEFunction(
+        value_function=v_function, lamb=LAMBDA, normalize_advantage=NORMALIZE_ADV
+    )
+    agent = A2CAgent(
+        nb_env=NB_ENV,
+        policy = policy,
         advantage_function=advantage_function,
-        policy_loss=policy_loss,
-        rollout_period= 2048,
-        epoch_per_rollout=4,
-        batch_size=64,
+        policy_loss=PPOLoss(
+            epsilon=EPSILON,
+            entropy_loss_coeff=ENTROPY_COEFF,
+            values_loss_coeff=VALUE_COEFF,
+            clip_value_loss=CLIP_VALUE_LOSS
+            ),
+        rollout_period=ROLLOUT_PERIOD,
+        epoch_per_rollout=EPOCH,
+        batch_size=BATCH_SIZE,
         observation_space=observation_space,
         action_space=action_space,
-        values_loss_coeff= 0.5
+        max_grad_norm=MAX_GRAD_NORM
     )
 
-
     episodes = 10000
-    for i in range(episodes):
-        episode_rewards = 0
-        episode_losses = []
-        episode_steps = 0
+    for i in range(0, episodes, 10):
+        sma_reward = 0
+        for _ in range(10):
+            agent.train()
+            episode_rewards = 0
+            episode_losses = []
+            episode_steps = 0
 
-        truncated = False
-        done = False
-        state, infos = env.reset()
-        
-        while not truncated and not done:
-            action = agent.pick_action(state= state)
-            next_state, reward, done, truncated, infos = env.step(action = action)
-            episode_rewards += reward
-            # print(state, action, reward, next_state, done, truncated)
-
-            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated = truncated)
-            loss = agent.train_agent()
-
-            if loss is not None: episode_losses.append(loss)
+            truncated = False
+            done = False
+            state, infos = env.reset()
             
-            episode_steps += 1
-            state = next_state
+            while not truncated and not done:
+                action, log_prob = agent.pick_action(state= state)
+                next_state, reward, done, truncated, infos = env.step(action = action)
+                episode_rewards += reward
+                
+                agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated, log_prob=log_prob)
+                loss = agent.train_agent()
 
-        episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
+                if loss is not None: episode_losses.append(loss)
+                
+                episode_steps += 1
+                state = next_state
 
+            sma_reward = episode_rewards * 0.2 + sma_reward * 0.8
+            episode_loss = np.array(episode_losses).mean() if len(episode_losses)>0 else np.nan
+            print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e}| Agent Step : {agent.step}")
 
 if __name__ == "__main__":
-    print(torch.distributions.Normal(
-        torch.as_tensor([[0, 1]], dtype=torch.float32), 
-        torch.as_tensor([[1,1]], dtype=torch.float32)
-    ).log_prob(
-        torch.as_tensor([[0,1]], dtype=torch.float32)
-    ))
+    import sys
+    sys.path.append("../")
     main()

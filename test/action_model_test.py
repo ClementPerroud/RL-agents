@@ -1,5 +1,5 @@
 from rl_agents.policies.single_policy import DummyPolicy
-from rl_agents.policies.epsilon_greedy_proxy import EspilonGreedyPolicy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 
 import numpy as np
 import torch

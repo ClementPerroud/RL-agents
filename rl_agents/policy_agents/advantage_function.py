@@ -67,20 +67,18 @@ class GAEFunction(BaseAdvantageFunction):
             # target_shape = self.value_function.compute_loss_target(experience=reserved_dataset[[0]]).shape
 
 
-        dataloader = torch.utils.data.DataLoader(
-            dataset=reserved_dataset, # Reserving the dataset so we go through the data backwards.
-            batch_size = agent.nb_env,
-            shuffle= False,
-            collate_fn=do_nothing_collate
-        )
 
+        batches = torch.arange(0, len(reserved_dataset)).reshape(shape = (-1, agent.nb_env))
         advantage = torch.zeros(size=(agent.nb_env,))
-        for experience in dataloader:
-            experience : ExperienceSample
+        for i in range(batches.size(0)):
+            indices = batches[i,:]
+            experience : ExperienceSample = reserved_dataset[indices]
+
             advantage, _return = self._gae(experience=experience, advantage_tp1 = advantage)
             agent.rollout_memory["advantage", experience.indices] = advantage
-            agent.rollout_memory["_return", experience.indices] = advantage
+            agent.rollout_memory["_return", experience.indices] = _return
             agent.rollout_memory["value", experience.indices] = self.value_function.V(experience.state)
         
-        advantages = agent.rollout_memory["advantage"]
-        agent.rollout_memory["advantage"] = (advantages - torch.mean(advantages))/(torch.std(advantages) + 1E-8)
+        if self.normalize_advantage:
+            advantages = agent.rollout_memory["advantage"]
+            agent.rollout_memory["advantage"] = (advantages - torch.mean(advantages))/(torch.std(advantages) + 1E-8)

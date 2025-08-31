@@ -9,7 +9,7 @@ import math
 import gymnasium as gym
 from abc import abstractmethod
 
-class AbstractDeepPolicy(AbstractPolicy):
+class AbstractStochasticPolicy(AbstractPolicy):
     def __init__(self, policy_net : torch.nn.Module, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.policy_net = policy_net
@@ -28,7 +28,7 @@ class AbstractDeepPolicy(AbstractPolicy):
     
 
 
-class DiscreteDeepPolicy(AbstractDeepPolicy):
+class DiscreteStochasticPolicy(AbstractStochasticPolicy):
     def action_distributions(self, state : torch.Tensor) -> torch.Tensor:
         # state : [batch, state_shape ...]
         action_probabilities : torch.Tensor= self.policy_net.forward(state)
@@ -47,7 +47,8 @@ class DiscreteDeepPolicy(AbstractDeepPolicy):
     def pick_action(self, state : torch.Tensor, **kwargs)-> torch.Tensor:
         # state : [batch, state_shape ...]
         action_probabilities, = self.action_distributions(state=state)
-        action = torch.multinomial(input=action_probabilities, num_samples=1).squeeze(-1) # Pick the actions randomly following their given probabilities.
+        if self.training: action = torch.multinomial(input=action_probabilities, num_samples=1).squeeze(-1) # Pick the actions randomly following their given probabilities.
+        else: action = action_probabilities.argmax(-1)
         
         log_prob = self.evaluate_log_prob(action_distributions= (action_probabilities,), action=action)
         return action.squeeze(-1), log_prob
@@ -56,7 +57,9 @@ class DiscreteDeepPolicy(AbstractDeepPolicy):
     def entropy_loss(self, action_probs : torch.Tensor):
         return torch.distributions.Categorical(probs = action_probs).entropy().mean()
 
-class ContinuousDeepPolicy(AbstractDeepPolicy):
+
+
+class ContinuousStochasticPolicy(AbstractStochasticPolicy):
     def __init__(self, action_space : gym.spaces.Box, policy_net, *args, **kwargs):
         self.low = torch.as_tensor(action_space.low, dtype = torch.float32)
         self.high = torch.as_tensor(action_space.high, dtype = torch.float32)
