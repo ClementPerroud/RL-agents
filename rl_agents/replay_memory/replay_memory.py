@@ -144,8 +144,7 @@ class BaseReplayMemory(torch.nn.Module, EditableMemory[Experience]):
             except KeyError:
                 warnings.warn(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
             else:
-                if i+nb_env <= self.max_length: 
-                    getattr(self, f"memory_{name}")[indices] = val_tensor
+                getattr(self, f"memory_{name}")[indices] = val_tensor
 
         self.i += nb_env
         return indices

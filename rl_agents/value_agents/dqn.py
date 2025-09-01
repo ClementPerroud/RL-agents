@@ -1,6 +1,6 @@
 from rl_agents.value_functions.dqn_function import DQN
 from rl_agents.value_functions.value import Q, Trainable
-from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.policies.policy import Policy
 from rl_agents.value_agents.value_agent import AbstractValueAgent
 from rl_agents.replay_memory.replay_memory import BaseReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler
@@ -12,7 +12,7 @@ class DQNAgent(AbstractValueAgent):
     def __init__(
         self,
         nb_env: int,
-        policy: AbstractPolicy,
+        policy: Policy,
         q_function : DQN,
         train_every : int,
         replay_memory : BaseReplayMemory,

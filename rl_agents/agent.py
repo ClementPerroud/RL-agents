@@ -1,4 +1,4 @@
-from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.policies.policy import Policy
 from rl_agents.service import AgentService
 
 from abc import ABC, abstractmethod
@@ -6,11 +6,11 @@ import torch
 import numpy as np
 
 
-class AbstractAgent(AbstractPolicy, AgentService, ABC):
+class AbstractAgent(Policy, AgentService, ABC):
     def __init__(
         self,
         nb_env: int,
-        policy: AbstractPolicy,
+        policy: Policy,
         **kwargs
     ):
         super().__init__(**kwargs)

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Protocol, NamedTuple, Type
+from typing import TYPE_CHECKING, Protocol, NamedTuple, Type, runtime_checkable
 import torch
 
 class MemoryField (NamedTuple):
@@ -7,6 +7,7 @@ class MemoryField (NamedTuple):
     dtype : Type
     default : None = None
 
+@runtime_checkable
 class Memory[T](Protocol):
     max_length : int
     fields : list[MemoryField]

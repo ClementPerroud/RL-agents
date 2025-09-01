@@ -17,7 +17,7 @@ from rl_agents.value_functions.dqn_function import DQN, DiscreteQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
 
 from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
-from rl_agents.policies.stochastic_policy import DiscreteDeepPolicy
+from rl_agents.policies.stochastic_policy import DiscreteStochasticPolicy
 from rl_agents.value_functions.dvn_function import DVN, VWrapper
 from rl_agents.policy_agents.advantage_function import GAEFunction
 
@@ -54,11 +54,9 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
     )
-    policy_net = torch.nn.Sequential(
+    p_core_net = torch.nn.Sequential(
         torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
-        torch.nn.Linear(HIDDEN_DIM, action_space.n),
-        torch.nn.Softmax(dim = -1)
     )
 
     v_net = VWrapper(core_net=v_core_net)
@@ -68,9 +66,7 @@ def main():
         gamma=GAMMA,
     )
 
-    policy = DiscreteDeepPolicy(
-        policy_net= policy_net,
-    )
+    policy = DiscreteStochasticPolicy(core_net= p_core_net, action_space=action_space)
 
     advantage_function = GAEFunction(
         value_function=v_function, lamb=LAMBDA, normalize_advantage=NORMALIZE_ADV

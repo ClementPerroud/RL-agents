@@ -1,5 +1,5 @@
 from rl_agents.value_functions.dvn_function import DVN
-from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.policies.policy import Policy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, ExperienceSample, Experience
 from rl_agents.service import AgentService
 from rl_agents.value_functions.value import Q, V, Trainable
@@ -54,7 +54,7 @@ class DQN(DVN, Q, V, Trainable):
             net : Q,
             gamma : float,
             loss_fn : torch.nn.modules.loss._Loss = torch.nn.SmoothL1Loss(),
-            policy : AbstractPolicy = None,
+            policy : Policy = None,
             manager : VManager = VManager(),
             **kwargs
         ):

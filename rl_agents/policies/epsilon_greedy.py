@@ -1,13 +1,13 @@
 from rl_agents.agent import AbstractAgent
-from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.policies.policy import Policy
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
 from gymnasium.spaces import Space
 import math
 
-class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
-    def __init__(self, policy : AbstractPolicy, action_space: Space, epsilon = 1.0):
+class BaseEspilonGreedyPolicy(Policy, ABC):
+    def __init__(self, policy : Policy, action_space: Space, epsilon = 1.0):
         super().__init__()
         self.policy = policy
         self.action_space = action_space
@@ -51,7 +51,7 @@ class BaseEspilonGreedyPolicy(AbstractPolicy, ABC):
 
 
 class EspilonGreedyPolicy(BaseEspilonGreedyPolicy):
-    def __init__(self, policy : AbstractPolicy, epsilon_decay: int, action_space: Space, end_epsilon: float, start_epsilon : float = 1):
+    def __init__(self, policy : Policy, epsilon_decay: int, action_space: Space, end_epsilon: float, start_epsilon : float = 1):
         super().__init__(policy= policy, action_space=action_space, epsilon= start_epsilon)
         self.epsilon_decay = epsilon_decay
         self.start_epsilon = start_epsilon

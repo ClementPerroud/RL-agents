@@ -1,10 +1,9 @@
 from rl_agents.agent import AbstractAgent
 from rl_agents.service import AgentService
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
-from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.policies.policy import StochasticPolicy
 from rl_agents.replay_memory.sampler import RandomSampler
 from rl_agents.value_functions.value import V
-from rl_agents.policies.stochastic_policy import AbstractStochasticPolicy
 from rl_agents.replay_memory.rollout_memory import RolloutMemory
 from rl_agents.policy_agents.advantage_function import BaseAdvantageFunction
 from rl_agents.utils.collates import do_nothing_collate
@@ -28,7 +27,7 @@ class PPOLoss(AgentService):
         self.values_loss_coeff = values_loss_coeff
         self.clip_value_loss = clip_value_loss
     
-    def forward(self, agent : "A2CAgent", policy : AbstractStochasticPolicy, experience):
+    def forward(self, agent : "A2CAgent", policy : StochasticPolicy, experience):
         # advantage : [batch]
 
         action_distributions = policy.action_distributions(state=experience.state)
@@ -59,14 +58,16 @@ class PPOLoss(AgentService):
         else:
             value_loss = value_loss_unclipped.mean()
 
-        loss =  - policy_loss + value_loss*self.values_loss_coeff - self.entropy_loss_coeff * entropy_loss
+        loss : torch.Tensor =  - policy_loss + value_loss*self.values_loss_coeff - self.entropy_loss_coeff * entropy_loss
+        if not torch.isfinite(loss).all():
+            print("CATH BAD LOSS")
         return loss
 
 class A2CAgent(AbstractPolicyAgent):
     """Advantage Actor-Critic Agent"""
     def __init__(self,
             nb_env : int,
-            policy : AbstractStochasticPolicy,
+            policy : StochasticPolicy,
 
             advantage_function : BaseAdvantageFunction,
             policy_loss : PPOLoss,
@@ -82,8 +83,8 @@ class A2CAgent(AbstractPolicyAgent):
 
         ):
         super().__init__(nb_env = nb_env, policy = policy)
-        assert isinstance(self.policy, AbstractStochasticPolicy), "policy must be a StochasticPolicy."
-        self.policy : AbstractStochasticPolicy
+        assert isinstance(self.policy, StochasticPolicy), "policy must be a StochasticPolicy."
+        self.policy : StochasticPolicy
 
         self.advantage_function = advantage_function
 

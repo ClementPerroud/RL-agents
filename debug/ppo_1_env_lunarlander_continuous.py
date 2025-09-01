@@ -16,7 +16,7 @@ from rl_agents.value_functions.dqn_function import DQN, ContinuousQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
 
 from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
-from rl_agents.policies.stochastic_policy import ContinuousDeepPolicy
+from rl_agents.policies.stochastic_policy import ContinuousStochasticPolicy
 from rl_agents.value_functions.dvn_function import DVN, VWrapper
 from rl_agents.policy_agents.advantage_function import GAEFunction
 
@@ -76,8 +76,8 @@ def main():
         gamma=GAMMA,
     )
 
-    policy = ContinuousDeepPolicy(
-        policy_net= policy_net,
+    policy = ContinuousStochasticPolicy(
+        policy_net=policy_net,
         action_space= action_space,
     )
 
