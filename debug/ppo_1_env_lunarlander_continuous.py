@@ -35,7 +35,7 @@ def main():
     EPSILON = 0.2
     ROLLOUT_PERIOD = 2048
     EPOCH = 5
-    ENTROPY_COEFF = 0.005
+    ENTROPY_COEFF = 0.001
     VALUE_COEFF = 0.5
     GAMMA = 0.99
     LAMBDA = 0.95
