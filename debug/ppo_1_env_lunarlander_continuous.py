@@ -24,21 +24,6 @@ import torch
 import numpy as np
 import gymnasium as gym
 
-class PolicyNet(torch.nn.Module):
-    def __init__(self, observation_space, action_space, hidden_dim, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.main_net = torch.nn.Sequential(
-            torch.nn.Linear(observation_space.shape[0], hidden_dim), torch.nn.ReLU(),
-            torch.nn.Linear(hidden_dim, hidden_dim), torch.nn.ReLU(),
-            torch.nn.Linear(hidden_dim, hidden_dim), torch.nn.ReLU()
-        )
-        self.mean_linear = torch.nn.Linear(hidden_dim, action_space.shape[0])
-        self.std_linear = torch.nn.Linear(hidden_dim, action_space.shape[0])
-        
-    def forward(self, state):
-        x = self.main_net(state)
-        return self.mean_linear(x), self.std_linear(x)
-
 def main():
     # gym.make("LunarLander-v3")
     env = gym.make("LunarLander-v3", continuous=True)
@@ -50,14 +35,14 @@ def main():
     EPSILON = 0.2
     ROLLOUT_PERIOD = 2048
     EPOCH = 5
-    ENTROPY_COEFF = 0.01
+    ENTROPY_COEFF = 0.005
     VALUE_COEFF = 0.5
     GAMMA = 0.99
     LAMBDA = 0.95
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
 
-    CLIP_VALUE_LOSS = True
+    CLIP_VALUE_LOSS = False
     NORMALIZE_ADV = True
     MAX_GRAD_NORM = None
 
@@ -67,7 +52,11 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
     )
-    policy_net = PolicyNet(observation_space=observation_space, action_space=action_space, hidden_dim=HIDDEN_DIM)
+    p_core_net = torch.nn.Sequential(
+        torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
+        torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
+    )
 
     v_net = VWrapper(core_net=v_core_net)
 
@@ -77,7 +66,7 @@ def main():
     )
 
     policy = ContinuousStochasticPolicy(
-        policy_net=policy_net,
+        core_net= p_core_net,
         action_space= action_space,
     )
 

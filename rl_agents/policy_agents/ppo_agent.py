@@ -59,7 +59,7 @@ class PPOLoss(AgentService):
             value_loss = value_loss_unclipped.mean()
 
         loss : torch.Tensor =  - policy_loss + value_loss*self.values_loss_coeff - self.entropy_loss_coeff * entropy_loss
-        if not torch.isfinite(loss).all():
+        if (~torch.isfinite(loss)).any() or torch.isnan(loss).any():
             print("CATH BAD LOSS")
         return loss
 

@@ -50,20 +50,27 @@ from torch.distributions.transforms import TanhTransform, AffineTransform
 
 _ContinuousActionDistribution = namedtuple("ContinuousActionDistribution", ["dist", "mean", "std"])
 
-class ContinuousStochasticPolicy(StochasticPolicy):
-    def __init__(self, action_space : gym.spaces.Box, policy_net, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.policy_net = policy_net
+class ContinuousStochasticPolicy(ContinuousPolicy, StochasticPolicy):
+    LOG_STD_MIN, LOG_STD_MAX = -2, 5
+    EPS = 1E-6
+    def __init__(self, action_space : gym.spaces.Box, core_net, *args, **kwargs):
+        super().__init__(core_net = core_net, action_space=action_space, *args, **kwargs)
         self.low = torch.as_tensor(action_space.low, dtype = torch.float32)
         self.high = torch.as_tensor(action_space.high, dtype = torch.float32)
         self.scale = (self.high - self.low)/2
         self.loc = (self.high + self.low)/2
-
+        self.head_mean = self.head
+        self.head_log_std = torch.nn.LazyLinear(action_space.shape[0])
+    
+    def forward(self, states):
+        x = self.core_net(states)
+        return self.head_mean(x), self.head_log_std(x)
 
     def action_distributions(self, state) -> torch.Tensor:
-        action_mean, action_log_std = self.policy_net.forward(state) # type: ignore
-        action_mean : torch.Tensor
-        action_log_std : torch.Tensor
+        action_mean, action_log_std = self.forward(state) # type: ignore
+        action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
+        if not torch.isfinite(action_mean).all(): raise RuntimeError("Actor mean has non-finite values")
+        if not torch.isfinite(action_log_std).all(): raise RuntimeError("Actor log_std has non-finite values")
 
         assert action_mean.ndim >= 2, f"The policy_net ouput must be of shape [batch, nb_action] while current shape is {action_mean.shape}"
         assert action_mean.ndim == action_log_std.ndim, f"Both outputs (mean, log std) must have the same shape ({action_mean.shape} != {action_log_std.shape})"
@@ -77,24 +84,15 @@ class ContinuousStochasticPolicy(StochasticPolicy):
         std = log_std.exp()
 
         # map action back to (-1,1) then to u-space
-        a_tanh = ((action - self.loc) / self.scale).clamp(-0.999999, 0.999999)
+        a_tanh = ((action - self.loc) / (self.scale + self.EPS)).clamp(-1 + self.EPS, 1 - self.EPS)
         u = self._atanh(a_tanh)
 
         base = torch.distributions.Normal(mean, std)
         log_prob_u = base.log_prob(u).sum(dim=-1)
 
-        corr = (torch.log(1 - a_tanh.pow(2) + 1e-6)).sum(dim=-1)
-        corr += torch.log(self.scale).sum()
+        corr = (torch.log(1 - a_tanh.pow(2) + self.EPS)).sum(dim=-1)
+        corr += torch.log(self.scale + self.EPS).sum()
         return log_prob_u - corr
-
-    @staticmethod
-    def _atanh(x, eps=1e-6):
-        x = x.clamp(-1 + eps, 1 - eps)
-        return 0.5 * (torch.log1p(x) - torch.log1p(-x))
-    
-    def _squash(self, u):
-        a = torch.tanh(u)
-        return self.loc + a * self.scale, a 
 
     def pick_action(self, state : torch.Tensor, **kwargs):
         # state : [batch, state_shape ...]
@@ -103,56 +101,11 @@ class ContinuousStochasticPolicy(StochasticPolicy):
         # action_mean : [batch, nb_action], action_log_std [batch, nb_actions]
         action_std = action_log_std.exp()
         u = action_mean + action_std * torch.randn_like(action_mean)  # reparam/sample
-        action, _ = self._squash(u)            # [1,A]
+        action = self._squash(u) # [1,A]
         
         log_prob = self.evaluate_log_prob(action_distributions= (action_mean, action_log_std), action=action)
         return action, log_prob
         # shape [batch]
 
     def entropy_loss(self, mean : torch.Tensor, log_std : torch.Tensor):
-        return torch.distributions.Normal(mean, log_std.exp()).entropy().mean()
-    
-
-    # def action_distributions(self, state) -> torch.Tensor:
-    #     action_mean, action_log_std = self.forward(state) # type: ignore
-    #     action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
-    #     if not torch.isfinite(action_mean).all(): raise RuntimeError("Actor mean has non-finite values")
-    #     if not torch.isfinite(action_log_std).all(): raise RuntimeError("Actor log_std has non-finite values")
-
-    #     assert action_mean.ndim >= 2, f"The policy_net ouput must be of shape [batch, nb_action] while current shape is {action_mean.shape}"
-    #     assert action_mean.ndim == action_log_std.ndim, f"Both outputs (mean, log std) must have the same shape ({action_mean.shape} != {action_log_std.shape})"
-    #     if action_mean.ndim == 1: # Make it -> [batch, 1] because nb_action = 1
-    #         action_mean.unsqueeze_(-1)
-    #         action_log_std.unsqueeze_(-1)
-    #     return action_mean, action_log_std
-    
-    # def evaluate_log_prob(self, action_distributions : tuple[torch.Tensor, torch.Tensor], action : torch.Tensor)-> torch.Tensor:
-    #     mean, log_std = action_distributions
-    #     std = log_std.exp()
-
-    #     # map action back to (-1,1) then to u-space
-    #     a_tanh = ((action - self.loc) / (self.scale + self.EPS)).clamp(-0.999999, 0.999999)
-    #     u = self._atanh(a_tanh)
-
-    #     base = torch.distributions.Normal(mean, std)
-    #     log_prob_u = base.log_prob(u).sum(dim=-1)
-
-    #     corr = (torch.log(1 - a_tanh.pow(2) + self.EPS)).sum(dim=-1)
-    #     corr += torch.log(self.scale + self.EPS).sum()
-    #     return log_prob_u - corr
-
-    # def pick_action(self, state : torch.Tensor, **kwargs):
-    #     # state : [batch, state_shape ...]
-    #     action_mean, action_log_std = self.action_distributions(state=state, **kwargs)
-
-    #     # action_mean : [batch, nb_action], action_log_std [batch, nb_actions]
-    #     action_std = action_log_std.exp()
-    #     u = action_mean + action_std * torch.randn_like(action_mean)  # reparam/sample
-    #     action = self._squash(u) # [1,A]
-        
-    #     log_prob = self.evaluate_log_prob(action_distributions= (action_mean, action_log_std), action=action)
-    #     return action, log_prob
-    #     # shape [batch]
-
-    # def entropy_loss(self, mean : torch.Tensor, log_std : torch.Tensor):
-    #     return (0.5 * (1.0 + math.log(2.0 * math.pi)) + log_std).sum(dim=-1)
+        return (0.5 * (1.0 + math.log(2.0 * math.pi)) + log_std).sum(dim=-1)
