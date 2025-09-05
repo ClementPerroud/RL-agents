@@ -1,4 +1,5 @@
 from rl_agents.agent import AbstractAgent
+from rl_agents.service import AgentService
 from rl_agents.policies.policy import Policy
 import numpy as np
 import torch
@@ -6,7 +7,7 @@ from abc import ABC, abstractmethod
 from gymnasium.spaces import Space
 import math
 
-class BaseEspilonGreedyPolicy(Policy, ABC):
+class BaseEspilonGreedyPolicy(Policy, AgentService, ABC):
     def __init__(self, policy : Policy, action_space: Space, epsilon = 1.0):
         super().__init__()
         self.policy = policy

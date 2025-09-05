@@ -51,6 +51,7 @@ class DQNAgent(AbstractValueAgent):
             loss = self.train_step()
             return loss
 
+    
     def train_step(self):
         indices = self.sampler.sample(self.batch_size)
         experience = self.replay_memory[indices]
@@ -58,13 +59,15 @@ class DQNAgent(AbstractValueAgent):
         self.optimizer.zero_grad()
 
         loss_input = self.q_function.compute_loss_input(experience=experience)
+
         with eval_mode(self), torch.no_grad():
             loss_target = self.q_function.compute_loss_target(experience=experience)
         loss = self.q_function.loss_fn(loss_input, loss_target)
-
         loss = self._apply_weights(loss, self.sampler.compute_weights_from_indices(experience.indices))
 
         loss = loss.mean()
+
+
         loss.backward()
 
         self.optimizer.step()

@@ -1,0 +1,76 @@
+{
+    "expectation": {
+        "calls": 78758,
+        "total_time": 5.926577504200395,
+        "self_time": 4.38644369575195,
+        "avg_total": 7.525048254400055e-05,
+        "avg_self": 5.569521440046662e-05,
+        "children": {
+            "to_tensor": {
+                "calls": 78758,
+                "total_time": 1.3963900047237985,
+                "self_time": 1.3963900047237985,
+                "avg_total": 1.773013541130804e-05,
+                "avg_self": 1.773013541130804e-05,
+                "children": {}
+            }
+        }
+    },
+    "to_tensor": {
+        "calls": 167850,
+        "total_time": 2.088103212416172,
+        "self_time": 2.088103212416172,
+        "avg_total": 1.2440293192827954e-05,
+        "avg_self": 1.2440293192827954e-05,
+        "children": {}
+    },
+    "new_distribution": {
+        "calls": 125886,
+        "total_time": 0.9565511942491867,
+        "self_time": 0.9565511942491867,
+        "avg_total": 7.598551024333021e-06,
+        "avg_self": 7.598551024333021e-06,
+        "children": {}
+    },
+    "project_on": {
+        "calls": 20981,
+        "total_time": 10.13976170483511,
+        "self_time": 1.6053129042265937,
+        "avg_total": 0.0004832830515626095,
+        "avg_self": 7.651269740367921e-05,
+        "children": {
+            "to_tensor": {
+                "calls": 20981,
+                "total_time": 0.28313789889216423,
+                "self_time": 0.28313789889216423,
+                "avg_total": 1.3494966821989621e-05,
+                "avg_self": 1.3494966821989621e-05,
+                "children": {}
+            },
+            "new_distribution": {
+                "calls": 20981,
+                "total_time": 0.3332654010155238,
+                "self_time": 0.3332654010155238,
+                "avg_total": 1.58841523766991e-05,
+                "avg_self": 1.58841523766991e-05,
+                "children": {}
+            }
+        }
+    },
+    "get_atoms": {
+        "calls": 99739,
+        "total_time": 0.1828724059741944,
+        "self_time": 0.1828724059741944,
+        "avg_total": 1.833509519588069e-06,
+        "avg_self": 1.833509519588069e-06,
+        "children": {}
+    },
+    "projection_distribution": {
+        "calls": 20981,
+        "total_time": 8.16234569979133,
+        "self_time": 7.853586397191975,
+        "avg_total": 0.0003890351127110877,
+        "avg_self": 0.0003743189741762535,
+        "children": {}
+    }
+}

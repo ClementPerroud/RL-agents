@@ -47,7 +47,10 @@ def main():
 
     V_MIN, V_MAX = -50, 200
     NB_ATOMS = 51
-    TAU = 500
+    NORMALIZE_ADV = True
+    CLIP_VALUE = True
+    MAX_GRAD_NORM = 1
+
 
 
     v_core_net = torch.nn.Sequential(
@@ -55,11 +58,9 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
     )
-    policy_net = torch.nn.Sequential(
+    p_core_net = torch.nn.Sequential(
         torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
-        torch.nn.Linear(HIDDEN_DIM, action_space.n),
-        torch.nn.Softmax(dim = -1)
     )
 
     v_net = DiscreteC51QWrapper(
@@ -75,20 +76,25 @@ def main():
     )
 
     policy = DiscreteStochasticPolicy(
-        policy_net= policy_net,
+        core_net=p_core_net, action_space=action_space
     )
     advantage_function = GAEFunction(
-        value_function=v_function, gamma=GAMMA, lamb=LAMBDA
+        value_function=v_function, lamb=LAMBDA, normalize_advantage=NORMALIZE_ADV
     )
     agent = A2CAgent(
         nb_env=NB_ENV,
         policy = policy,
         advantage_function=advantage_function,
-        policy_loss=PPOLoss(epsilon = EPSILON, entropy_loss_coeff=ENTROPY_COEFF),
+        policy_loss=PPOLoss(
+            epsilon = EPSILON,
+            entropy_loss_coeff=ENTROPY_COEFF,
+            values_loss_coeff=VALUE_COEFF,
+            clip_value_loss=CLIP_VALUE,
+        ),
         rollout_period=ROLLOUT_PERIOD,
         epoch_per_rollout=EPOCH,
         batch_size=BATCH_SIZE,
-        values_loss_coeff=VALUE_COEFF,
+        max_grad_norm=MAX_GRAD_NORM,
         observation_space=observation_space,
         action_space=action_space
     )

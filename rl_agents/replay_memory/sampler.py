@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class AbstractSampler(AgentService, ABC):
-    def sample(self, batch_size : int): ...
+    def sample(self, batch_size : int) -> torch.Tensor: ...
 
     def update(self, **kwargs): ...
 
@@ -36,7 +36,7 @@ class RandomSampler(AbstractSampler):
     def __len__(self) -> int: return len(self.replay_memory)
 
     @torch.no_grad()
-    def sample(self, batch_size : int): return torch.randint(0, len(self.replay_memory), (batch_size,)).tolist()
+    def sample(self, batch_size : int): return torch.randint(0, len(self.replay_memory), (batch_size,))
 
     @torch.no_grad()
     def compute_weights_from_indices(self, indices : torch.Tensor): return 1
@@ -45,7 +45,24 @@ class RandomSampler(AbstractSampler):
     def update_experiences(self, **kwargs): return 
     
 
+class LastSampler(AbstractSampler):
+    def __init__(self, replay_memory : "BaseReplayMemory"):
+        super().__init__()
+        self.replay_memory = replay_memory
 
+    @torch.no_grad()
+    def __len__(self) -> int: return len(self.replay_memory)
+
+    @torch.no_grad()
+    def sample(self, batch_size : int): 
+        n = len(self.replay_memory)
+        return torch.arange(start = n - batch_size, end = n)
+
+    @torch.no_grad()
+    def compute_weights_from_indices(self, indices : torch.Tensor): return 1
+
+    @torch.no_grad()
+    def update_experiences(self, **kwargs): return 
 
 
 class PrioritizedReplaySampler(AbstractSampler):

@@ -159,12 +159,13 @@ class BaseReplayMemory(torch.nn.Module, EditableMemory[Experience]):
         elif isinstance(loc, str):
             name = loc
             return getattr(self, f"memory_{name}")[:self.__len__()]
-        else:
-            indices = torch.as_tensor(loc)
+        elif isinstance(loc, torch.Tensor):
+            indices = loc
             return self.sample_dataclass_generator(
                 indices=indices,
                 **asdict(self.__get_experience_from_indices__(indices=indices))
             )
+        raise NotImplementedError(f"Cannot get items from {self} from loc of type {loc.__class__}")
     
     def __getitems__(self, indices): return self.__getitem__(loc = indices)
     
