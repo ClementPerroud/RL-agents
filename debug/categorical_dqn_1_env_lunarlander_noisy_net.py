@@ -34,18 +34,22 @@ def main():
     GAMMA = 0.99
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
-    TRAIN_EVERY = 1
+    TRAIN_EVERY = 3
     LR = 3E-4
     TAU = 1./0.005
+    N_STEP = 3
 
     V_MIN, V_MAX = -300, 300
     NB_ATOMS = 51
 
-    NOISY_STD = 0.1
+    NOISY_STD = 0.2
 
-    replay_memory = ReplayMemory(
+    replay_memory = MultiStepReplayMemory(
         max_length = MEMORY_SIZE,
-        observation_space= observation_space
+        observation_space= observation_space,
+        nb_env=NB_ENV,
+        gamma=GAMMA,
+        multi_step=N_STEP
     )
     sampler= RandomSampler(
         replay_memory=replay_memory

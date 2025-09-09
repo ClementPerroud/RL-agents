@@ -55,7 +55,7 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
     )
-    policy_net = torch.nn.Sequential(
+    p_core_net = torch.nn.Sequential(
         torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, action_space.n),
@@ -69,9 +69,7 @@ def main():
         gamma=GAMMA,
     )
 
-    policy = DiscreteStochasticPolicy(
-        policy_net= policy_net,
-    )
+    policy = DiscreteStochasticPolicy(core_net=p_core_net, action_space=action_space)
 
     advantage_function = GAEFunction(
         value_function=v_function, lamb=LAMBDA, normalize_advantage=NORMALIZE_ADV
@@ -83,7 +81,8 @@ def main():
         policy_loss=PPOLoss(
             epsilon=EPSILON,
             entropy_loss_coeff=ENTROPY_COEFF,
-            values_loss_coeff=VALUE_COEFF,
+            value_loss= torch.nn.MSELoss(reduce = "none"),
+            value_loss_coeff=VALUE_COEFF,
             clip_value_loss=CLIP_VALUE_LOSS
             ),
         rollout_period=ROLLOUT_PERIOD,

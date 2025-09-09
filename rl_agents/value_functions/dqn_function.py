@@ -76,11 +76,9 @@ class DQN(DVN, Q, V, Trainable):
         return self.Q(state=state, action=action, target = q_target)
 
     # Loss config
-    @torch.compile(fullgraph=True)
     def compute_loss_input(self, experience : Experience) -> torch.Tensor: 
         return self.Q(experience.state, experience.action)
     
-    @torch.compile(fullgraph=True)
     @torch.no_grad()
     def compute_loss_target(self, experience : Experience) -> torch.Tensor:
         return experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state, q_target = True)

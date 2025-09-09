@@ -1,128 +1,163 @@
-import numpy as np
+import torch
 from collections.abc import Iterable
 
+epsilon = 1e-6  # strictly positive clamp
 
-epsilon = 1e-6  # Small constant to avoid zero‑probability issues
 
 class SumTree:
-    """Binary SumTree for Prioritized Experience Replay (PER).
-
-    Each leaf stores a *non‑negative* priority p_i. Internal nodes store the sum
-    of their two children. Thanks to this property, we can sample a leaf in
-    O(log N) via a cumulative‑sum lookup.
-
-    Parameters
-    ----------
-    size : int
-        Maximum number of elements that can be stored (capacity). When the tree
-        is full, `add()` overwrites in circular fashion (FIFO).
+    """
+    Flat-array SumTree for Prioritized Experience Replay (PER), using torch tensors.
     """
 
-    def __init__(self, size: int):
-        if size <= 0:
+    def __init__(self, size: int, dtype: torch.dtype = torch.float32):
+        if not isinstance(size, int) or size <= 0:
             raise ValueError("size must be a strictly positive integer")
 
-        self.size = int(size)
-        self.length = 0          # Number of elements actually inserted
+        self.size = int(size)                  # capacity
+        self.length = 0                        # how many items have ever been written (clamped to size)
+        self.write = 0                         # next leaf slot in [0, size)
+        self.leaf_start = self.size - 1        # first leaf index in flat tree
 
-        # ----- Build layered array of sums (bottom → top) -----
-        self.node_layers: list[np.ndarray] = [np.zeros(size, dtype=np.float32)]
-        layer_size = size
-        while layer_size > 1:
-            layer_size = (layer_size + 1) // 2
-            self.node_layers.append(np.zeros(layer_size, dtype=np.float32))
+        # One contiguous tensor for the entire tree (internal + leaves)
+        # We keep it on CPU and out of autograd on purpose.
+        self.tree = torch.zeros(2 * self.size - 1, dtype=dtype)
+        self.tree.requires_grad_(False)
 
-        self.n_layers = len(self.node_layers)
+    # ----------------------------- helpers ---------------------------------
 
-    # ---------------------------------------------------------------------
-    # Internal helpers
-    # ---------------------------------------------------------------------
-    def _propagate(self, leaf_idx: int, change: float) -> None:
-        """Propagate *change* from a leaf up to the root."""
-        for layer in range(1, self.n_layers):
-            leaf_idx //= 2
-            self.node_layers[layer][leaf_idx] += change
+    @torch.no_grad()
+    def _update_leaf(self, leaf_pos: int, new_p: float) -> None:
+        """Set leaf at logical position (0..size-1) to new_p and propagate."""
+        leaf_idx = self.leaf_start + int(leaf_pos)
 
-    # ---------------------------------------------------------------------
-    # Public API
-    # ---------------------------------------------------------------------
-    def add(self, value: float | Iterable[float]):
-        """Insert a priority (or a batch of priorities) at the next position.
+        # Clamp to strictly positive to avoid dead leaves
+        v = float(new_p)
+        if not torch.isfinite(torch.tensor(v)):
+            raise ValueError(f"priority must be finite, got {v}")
+        if v <= 0:
+            v = epsilon
 
-        If the capacity is reached, we overwrite in FIFO order.
+        change = v - float(self.tree[leaf_idx])
+        if change == 0.0:
+            return  # nothing to do
+
+        self.tree[leaf_idx] = v
+
+        # Propagate change up to the root
+        idx = leaf_idx
+        while idx != 0:
+            idx = (idx - 1) // 2
+            self.tree[idx] += change
+
+    # ------------------------------ API ------------------------------------
+
+    @torch.no_grad()
+    def add(self, value: float | Iterable[float]) -> None:
         """
-        if isinstance(value, Iterable):
+        Insert a priority (or batch). Overwrites in FIFO when full.
+        """
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
             for v in value:
-                self.add(v)
+                self.add(float(v))
             return
 
-        v = float(max(value, epsilon))  # Clamp to strictly positive
-        leaf_idx = self.length % self.size
-        self.length += 1
+        pos = self.write
+        self._update_leaf(pos, float(value))
 
-        change = v - self.node_layers[0][leaf_idx]
-        self.node_layers[0][leaf_idx] = v
-        self._propagate(leaf_idx, change)
+        # Move circular pointer & adjust logical length
+        self.write = (self.write + 1) % self.size
+        self.length = min(self.length + 1, self.size)
 
-    def __setitem__(self, idx: int | np.ndarray, value):
-        """Update one or several priorities in‑place."""
-        if isinstance(idx, (list, np.ndarray)):
-            idx = np.asarray(idx, dtype=int)
-            value = np.asarray(value, dtype=np.float32)
-            if idx.shape != value.shape:
+    @torch.no_grad()
+    def __setitem__(self, idx, value) -> None:
+        """
+        Update one or several priorities in-place.
+        - idx can be int, list[int], torch.Tensor[int]
+        - value can be float or a same-shaped container
+        """
+        # Vector/batch case
+        if isinstance(idx, (list, tuple)) or (isinstance(idx, torch.Tensor) and idx.ndim >= 1):
+            idx_t = torch.as_tensor(idx, dtype=torch.long)
+            val_t = torch.as_tensor(value, dtype=self.tree.dtype)
+            if idx_t.shape != val_t.shape:
                 raise ValueError("index and value must have the same shape")
-            for i, v in zip(idx, value):
+            for i, v in zip(idx_t.tolist(), val_t.tolist()):
                 self.__setitem__(int(i), float(v))
             return
 
-        if idx >= self.length:
-            raise IndexError(
-                f"Cannot set value at index {idx} (current length = {self.length})")
+        # Scalar case
+        i = int(idx)
+        if i < 0 or i >= self.length:
+            raise IndexError(f"Cannot set value at index {i} (current length = {self.length})")
+        self._update_leaf(i, float(value))
 
-        v = float(max(value, epsilon))
-        change = v - self.node_layers[0][idx]
-        self.node_layers[0][idx] = v
-        self._propagate(idx, change)
+    def __getitem__(self, idx):
+        """
+        Read leaf priority (or priorities).
+        Returns torch.Tensor for vector input, Python float for scalar.
+        """
+        if isinstance(idx, (list, tuple)) or (isinstance(idx, torch.Tensor) and idx.ndim >= 1):
+            idx_t = torch.as_tensor(idx, dtype=torch.long)
+            leaf_idx = self.leaf_start + idx_t
+            return self.tree.index_select(0, leaf_idx)
+        else:
+            i = int(idx)
+            return float(self.tree[self.leaf_start + i])
 
-    def __getitem__(self, idx: int | np.ndarray):
-        return self.node_layers[0][idx]
-
-    # ------------------------------------------------------------------
-    # Sampling
-    # ------------------------------------------------------------------
     def sum(self) -> float:
-        """Return the total priority (value stored in the root)."""
-        return float(self.node_layers[-1][0])
+        """Total priority (value at the root)."""
+        return float(self.tree[0])
 
+    @torch.no_grad()
     def sample(self, batch_size: int) -> list[int]:
-        """Sample *batch_size* leaf indices proportionally to their priorities.
-        Raises ValueError if the tree is empty.
+        """
+        Sample `batch_size` leaf indices proportionally to their priorities.
+        Raises ValueError if empty or if total priority is non-positive.
         """
         if self.length == 0:
             raise ValueError("Cannot sample from an empty SumTree")
 
         total = self.sum()
-        if not np.isfinite(total) or total <= 0.0:
+        if not torch.isfinite(torch.tensor(total)) or total <= 0.0:
             raise ValueError(f"Invalid total priority: {total}")
 
-        cumsums = np.random.rand(batch_size) * (total - epsilon)
-        indices: list[int] = []
+        # Draw targets uniformly in [0, total)
+        # (subtract tiny epsilon to avoid edge-case hitting exactly total)
+        targets = torch.rand(batch_size) * max(total - epsilon, 0.0)
 
-        for cs in cumsums:
-            idx = 0  # Start from the root.
-            for layer in range(self.n_layers - 1, 0, -1):
-                left_idx = idx * 2
-                left_sum = self.node_layers[layer - 1][left_idx]
-                if cs < left_sum:
-                    idx = left_idx
+        out: list[int] = []
+        for s in targets.tolist():
+            idx = 0  # start at root
+            # Descend until a leaf is reached
+            while idx < self.leaf_start:  # while we're at an internal node
+                left = 2 * idx + 1
+                right = left + 1
+
+                left_sum = float(self.tree[left])
+                if s < left_sum:
+                    idx = left
                 else:
-                    idx = left_idx + 1
-                    cs -= left_sum
-            # `idx` is now a leaf index.
-            if idx >= self.length:
-                # This can happen only if some of the last leaves were never
-                # filled (length < capacity). Draw again.
-                idx = np.random.randint(0, self.length)
-            indices.append(idx)
+                    s -= left_sum
+                    idx = right
 
-        return indices
+            # Convert flat leaf index to logical position [0..size-1]
+            pos = idx - self.leaf_start
+
+            # If buffer is not yet full, the tail leaves are zero; they won't be hit
+            # unless user set them explicitly. As a last guard:
+            if pos >= self.length:
+                # pick a valid index uniformly
+                pos = int(torch.randint(0, self.length, (1,)).item())
+
+            out.append(int(pos))
+
+        return out
+
+    # (Optional) helpers
+    def __len__(self) -> int:
+        return self.length
+
+    @property
+    def priorities(self) -> torch.Tensor:
+        """View of all leaf priorities (length == size)."""
+        return self.tree[self.leaf_start:self.leaf_start + self.size]

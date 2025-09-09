@@ -1,5 +1,5 @@
 from rl_agents.replay_memory.replay_memory import BaseReplayMemory
-from rl_agents.replay_memory.sampler import AbstractSampler, RandomSampler
+from rl_agents.replay_memory.codec import TensorCodec
 from rl_agents.replay_memory.replay_memory import MemoryField
 
 import torch
@@ -27,7 +27,7 @@ class RolloutMemory(BaseReplayMemory):
                 MemoryField("reward",       (),                      torch.float32),
                 MemoryField("done",         (),                      torch.bool),
                 MemoryField("truncated",    (),                      torch.bool),
-                MemoryField("log_prob", (),                      torch.float32),
+                MemoryField("log_prob",     (),                      torch.float32),
             ],
             device=device,
         )

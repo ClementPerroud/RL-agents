@@ -16,7 +16,6 @@ from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSamp
 from rl_agents.value_functions.c51_dqn_function import C51DQN, DiscreteC51QWrapper
 from rl_agents.value_agents.dqn import DQNAgent
 
-TORCHDYNAMO_VERBOSE=1
 import torch
 import numpy as np
 import gymnasium as gym

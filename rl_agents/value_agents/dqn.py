@@ -5,6 +5,7 @@ from rl_agents.value_agents.value_agent import AbstractValueAgent
 from rl_agents.replay_memory.replay_memory import BaseReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import AbstractSampler
 from rl_agents.utils.mode import eval_mode
+from rl_agents.utils.distribution.distribution import distribution_aware
 import torch
 
 
@@ -51,7 +52,7 @@ class DQNAgent(AbstractValueAgent):
             loss = self.train_step()
             return loss
 
-    
+    @distribution_aware
     def train_step(self):
         indices = self.sampler.sample(self.batch_size)
         experience = self.replay_memory[indices]
@@ -66,7 +67,6 @@ class DQNAgent(AbstractValueAgent):
         loss = self._apply_weights(loss, self.sampler.compute_weights_from_indices(experience.indices))
 
         loss = loss.mean()
-
 
         loss.backward()
 

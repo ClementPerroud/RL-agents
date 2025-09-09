@@ -93,15 +93,15 @@ class PrioritizedReplaySampler(AbstractSampler):
     @torch.no_grad()
     def compute_weights_from_indices(self, indices : torch.Tensor):
         beta = min(1, self.beta_0 + (1 - self.beta_0) * self.step / self.duration)
-        weights : np.ndarray= (len(self) * self.priorities[indices.cpu().numpy()] / (self.priorities.sum() + 1E-8)) ** (-beta)
+        weights : np.ndarray= (len(self) * self.priorities[indices] / (self.priorities.sum() + 1E-8)) ** (-beta)
         weights = weights / (weights.max() + 1E-6)
         return weights
 
 
     @torch.no_grad()
     def update_experiences(self, indices : torch.Tensor, td_errors : torch.Tensor = None, **kwargs):
-        td_errors = td_errors.abs().cpu().numpy()
-        self.priorities[indices.cpu().numpy()] = (td_errors + 1e-6) ** self.alpha
+        td_errors = td_errors.abs()
+        self.priorities[indices] = (td_errors + 1e-6) ** self.alpha
 
     @torch.no_grad()
     def store(self, experience = None, **kwargs):

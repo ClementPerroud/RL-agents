@@ -1,10 +1,15 @@
+from rl_agents.replay_memory.codec import MemoryCodec, TensorCodec
+
 from typing import TYPE_CHECKING, Protocol, NamedTuple, Type, runtime_checkable
 import torch
+
+
 
 class MemoryField (NamedTuple):
     name : str
     shape : tuple
     dtype : Type
+    codec : MemoryCodec = TensorCodec()
     default : None = None
 
 @runtime_checkable
@@ -19,5 +24,5 @@ class Memory[T](Protocol):
     def __setitem__(self, loc, val): ...
 
 class EditableMemory[T](Memory[T]):
-    def add_field(self, name : str, shape : tuple[int], dtype : None, default_value = None):...
+    def add_field(self, field : MemoryField):...
     def remove_field(self, name : str):...

@@ -41,110 +41,96 @@ class BaseReplayMemory(torch.nn.Module, EditableMemory[Experience]):
         self.device = device
 
 
-        self.fields  = []
+        self.fields : list[MemoryField] = []
+        self.fields_by_name : dict[str, MemoryField] = {}
+        self._mandatory_fields_name = set()
         for field in fields:
             if isinstance(field, MemoryField): pass
             if isinstance(field, tuple): field = MemoryField(*field)
             else: raise ValueError(f"Invalid type of field {type(field)}. Must be a tuple or MemoryField.")
-            self.fields.append(field)
-        # Unpack fields
-        self._mandatory_fields = set()
-        self.names, self.sizes, self.dtypes, self.default_values = [], {}, {}, {}
-        for field in self.fields: self._set_up_field(*field) # Field : (name, shape, dtype, (optional) default_value)
+            self._set_up_field(field) 
+
         self._generate_dataclasses()
         self.i = 0
 
+    @property
+    def names(self) -> list[str]:
+        return list(self.fields_by_name.keys())
 
     def _generate_dataclasses(self):
         # Create the dataclasses dynamically
-        experience_fields = [(name, torch.Tensor) for name in self.names]
+        experience_fields = [(field.name, field.codec.tensor_class) for field in self.fields]
 
         self.experience_dataclass_generator = make_dataclass(
-            f"Experience{self.__class__.__name__}",
-            fields=experience_fields,
-            bases=(Experience,),
-            kw_only=True,
-            slots=True,
-            frozen=True
+            f"Experience{self.__class__.__name__}", fields=experience_fields,
+            bases=(Experience,), kw_only=True, slots=True, frozen=True
         )
         self.sample_dataclass_generator = make_dataclass(
-            f"ExperienceSample{self.__class__.__name__}",
-            fields=experience_fields,
-            bases=(ExperienceSample,),
-            kw_only=True,
-            slots=True,
-            frozen=True
+            f"ExperienceSample{self.__class__.__name__}", fields=experience_fields,
+            bases=(ExperienceSample,), kw_only=True, slots=True, frozen=True
         )
 
-    def _set_up_field(self, name : str, shape : tuple[int], dtype : None, default_value = None):
-        assert name not in self.names, f"Found duplicate fields {name} in {self.names}"
-        self.names.append(name)
-        self.sizes[name] = (self.max_length,) + shape
-        self.dtypes[name] = dtype
-        if default_value is not None: self.default_values[name] = default_value
-        else: self._mandatory_fields.add(name)
-        self._set_tensor(name=name)
 
-    def add_field(self, name : str, shape : tuple[int], dtype : None, default_value = None):
-        self._set_up_field(name=name, shape=shape, dtype=dtype, default_value=default_value)
+    def add_field(self, field : MemoryField):
+        self._set_up_field(field)
         self._generate_dataclasses()
+
+    def _set_up_field(self, field : MemoryField):
+        assert field.name not in self.fields_by_name, f"Found duplicate fields {field.name} in {self.names}"
+        self.fields.append(field)
+        self.fields_by_name[field.name] = field
+        if field.default is None: 
+            self._mandatory_fields_name.add(field.name)
     
+        buf = field.codec.allocate(size= (self.max_length, ) + field.shape, field=field, device=self.device)
+        self.register_buffer(name=f"memory_{field.name}", tensor=buf, persistent=True)
+
     def remove_field(self, name : str):
-        self.names.remove(name)
-        self.sizes.pop(name)
-        self.dtypes.pop(name)
-        self.default_values.pop(name, 0)
-        if name in self._mandatory_fields: self._mandatory_fields.remove(name)
+        field = self.fields_by_name[name]
+        self.fields.remove(field)
+        self.fields_by_name.pop(field.name)
+        if name in self._mandatory_fields_name: self._mandatory_fields_name.remove(name)
         self.__delattr__(name="memory_{name}")
         self._generate_dataclasses()
         
 
     def reset(self, name = None):
-        for name in self.names: 
+        for name in self.fields_by_name: 
             buf : torch.Tensor = getattr(self, f"memory_{name}")
-            fill_value = self.default_values.get(name, 0)
-            buf.fill_(fill_value)
+            field = self.fields_by_name[name]
+            field.codec.reset_fill(buf=buf, field=field)
         self.i: int = 0
 
-    def _set_tensor(self, name : str):
-        fill_value = self.default_values.get(name, 0)
-        self.register_buffer(
-            name=f"memory_{name}",
-            tensor=torch.full(size = self.sizes[name], fill_value=fill_value, dtype = self.dtypes[name]),
-            persistent=True,
-        )
-    
     def __len__(self): return min(self.i, self.max_length)
 
     @torch.no_grad()
     def store(self, experience = None, **kwargs):
         """Save a experience"""
-        
         if experience is not None: kwargs.update(asdict(experience))
 
-        assert self._mandatory_fields.issubset(kwargs.keys()), (
-            f"Missing fields. Expected at least {sorted(self._mandatory_fields)}, got {sorted(kwargs.keys())}"
-        )
+        # ensure mandatory fields present
+        missing = self._mandatory_fields_name.difference(kwargs.keys())
+        assert not missing, f"Missing fields: {sorted(missing)}"
         
         i = int(self.i % self.max_length)
 
-        nb_env = next(iter(kwargs.values())).size(0)
+        nb_env = torch.as_tensor(next(iter(kwargs.values()))).size(0)
 
         # Compute indices
         if i+nb_env <= self.max_length: indices = torch.arange(i,i+nb_env)
         else:
-            n_end = self.max_length - i
-            n_start = nb_env - n_end 
-            indices = torch.cat([torch.arange(i,i+nb_env), torch.arange(0,n_start)])
+            n_end = self.max_length
+            n_start = nb_env + i - n_end 
+            indices = torch.cat([torch.arange(i, n_end, device=self.device), torch.arange(0, n_start, device=self.device)])
         indices = indices.long()
 
         for name, val in kwargs.items():
-            try:
-                val_tensor = torch.as_tensor(val, dtype = self.dtypes[name])
-            except KeyError:
+            field = self.fields_by_name.get(name)
+            if field is None:
                 warnings.warn(f"{name} does not exist as a field in {self.__class__.__name__}. Current fields : {', '.join(self.names)}")
-            else:
-                getattr(self, f"memory_{name}")[indices] = val_tensor
+                continue
+            val = field.codec.encode(val, field=field, device=self.device)
+            getattr(self, f"memory_{name}")[indices] = val
 
         self.i += nb_env
         return indices
@@ -155,23 +141,40 @@ class BaseReplayMemory(torch.nn.Module, EditableMemory[Experience]):
         name :str
         if isinstance(loc, tuple):
             name, index= loc
-            return getattr(self, f"memory_{name}")[index]
+            val = getattr(self, f"memory_{name}")[index]
+            field = self.fields_by_name[name]
+            return self.fields_by_name[name].codec.decode(val, field=field)
         elif isinstance(loc, str):
             name = loc
-            return getattr(self, f"memory_{name}")[:self.__len__()]
+            val = getattr(self, f"memory_{name}")[:self.__len__()]
+            field = self.fields_by_name[name]
+            return self.fields_by_name[name].codec.decode(val, field=field)
         elif isinstance(loc, torch.Tensor):
             indices = loc
-            return self.sample_dataclass_generator(
-                indices=indices,
-                **asdict(self.__get_experience_from_indices__(indices=indices))
-            )
+            return self.__get_experience_from_indices__(indices=indices)
         raise NotImplementedError(f"Cannot get items from {self} from loc of type {loc.__class__}")
     
     def __getitems__(self, indices): return self.__getitem__(loc = indices)
     
     @torch.no_grad()
-    def __get_experience_from_values__(self, **kwargs): return self.experience_dataclass_generator(**{name : torch.as_tensor(value, dtype = self.dtypes[name]) for name, value in kwargs.items()})
-    def __get_experience_from_indices__(self, indices): return self.experience_dataclass_generator(**{name : getattr(self, f"memory_{name}")[indices] for name in self.names})
+    def __compute_experience_from_values__(self, **kwargs): 
+        out = {}
+        for name, value in kwargs.items():
+            field = self.fields_by_name[name]
+            out[name] = field.codec.encode(value, field=field, device=self.device)
+        return self.experience_dataclass_generator(**out)
+
+    @torch.no_grad()
+    def __get_experience_from_indices__(self, indices):
+        values = {name : getattr(self, f"memory_{name}")[indices] for name in self.fields_by_name.keys()}
+        out = {}
+        for name, value in values.items():
+            field = self.fields_by_name[name]
+            out[name] = field.codec.decode(value, field=field)
+        return self.sample_dataclass_generator(
+                indices=indices,
+                **out
+            )
 
     @torch.no_grad()
     def __setitem__(self, loc, val):
@@ -179,10 +182,12 @@ class BaseReplayMemory(torch.nn.Module, EditableMemory[Experience]):
         name :str
         if isinstance(loc, tuple):
             name, indices= loc
-            getattr(self, f"memory_{name}")[indices] = val
+            field = self.fields_by_name[name]
+            getattr(self, f"memory_{name}")[indices] = field.codec.encode(val, field=field, device=self.device)
         elif isinstance(loc, str):
             name = loc
-            getattr(self, f"memory_{name}")[:self.__len__()] = val
+            field = self.fields_by_name[name]
+            getattr(self, f"memory_{name}")[:self.__len__()] = field.codec.encode(val, field=field, device=self.device)
 
 
 class ReplayMemory(BaseReplayMemory):
@@ -281,7 +286,7 @@ class MultiStepReplayMemory(BaseReplayMemory):
         # Boucle fine sur les envs ; la plupart du temps nb_env <= 16, négligeable.
         for env_id in range(self.nb_env):
             kwargs_env = {key : val[env_id] for key, val in kwargs.items()}
-            experience_env = self.__get_experience_from_values__(**kwargs_env)
+            experience_env = self.__compute_experience_from_values__(**kwargs_env)
 
             buf = self.buffers[env_id]
             buf.append(experience_env) # We use tensor[env_id:env_id+1] to select the one elem corresponding 

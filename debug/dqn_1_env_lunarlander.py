@@ -74,8 +74,6 @@ def main():
     )
     
     optimizer = torch.optim.AdamW(params=q_function.parameters(), lr = LR, amsgrad=True)
-    for name, param in q_net.named_parameters():
-        print(name, param)
 
     agent = DQNAgent(
         nb_env= NB_ENV,

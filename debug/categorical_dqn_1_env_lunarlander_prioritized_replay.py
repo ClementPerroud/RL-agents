@@ -33,7 +33,7 @@ def main():
     GAMMA = 0.99
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
-    TRAIN_EVERY = 1
+    TRAIN_EVERY = 3
     EPS_START = 0.9
     EPS_END = 0.05
     EPS_DECAY = 5000
@@ -65,7 +65,7 @@ def main():
         v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS
     )
     sampler= PrioritizedReplaySampler(
-        replay_memory=replay_memory, service=q_function, duration= 50_000
+        replay_memory=replay_memory, service=q_function, duration= 150_000
     )
 
 

@@ -33,7 +33,7 @@ def main():
     GAMMA = 0.99
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
-    TRAIN_EVERY = 1
+    TRAIN_EVERY = 3
     LR = 3E-4
     TAU = 1./0.005
     MULTI_STEP = 3
@@ -48,7 +48,6 @@ def main():
         gamma=GAMMA,
         multi_step=MULTI_STEP
     )
-    # sampler= PrioritizedReplaySampler(replay_memory=replay_memory, batch_size = 64, duration= 100_000),
 
     core_net  = torch.nn.Sequential(
         torch.nn.Linear(observation_space.shape[0], HIDDEN_DIM), torch.nn.ReLU(),
@@ -66,7 +65,7 @@ def main():
         v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS
     )
     sampler= PrioritizedReplaySampler(
-        replay_memory=replay_memory, service=q_function, duration= 50_000
+        replay_memory=replay_memory, service=q_function, duration= 150_000
     )
 
     policy= DiscreteBestQValuePolicy(q = q_function)

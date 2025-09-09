@@ -77,7 +77,8 @@ def main():
         policy_loss=PPOLoss(
             epsilon=EPSILON,
             entropy_loss_coeff=ENTROPY_COEFF,
-            values_loss_coeff=VALUE_COEFF,
+            value_loss= torch.nn.MSELoss(reduction="none"),
+            value_loss_coeff=VALUE_COEFF,
             clip_value_loss=CLIP_VALUE_LOSS
             ),
         rollout_period=ROLLOUT_PERIOD,

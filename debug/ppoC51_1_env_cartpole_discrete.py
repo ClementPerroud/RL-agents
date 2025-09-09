@@ -14,7 +14,7 @@ from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_functions.dqn_function import DQN, DiscreteQWrapper
-from rl_agents.value_functions.c51_dqn_function import C51DQN, DiscreteC51QWrapper
+from rl_agents.value_functions.c51_dqn_function import C51DQN, DiscreteC51QWrapper, C51Loss
 from rl_agents.value_agents.dqn import DQNAgent
 
 from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
@@ -28,29 +28,28 @@ import gymnasium as gym
 
 
 def main():
-    # gym.make("LunarLander-v3")
-    env = gym.make("CartPole-v1")
+    env = gym.make("LunarLander-v3")
+    # env = gym.make("CartPole-v1")
 
     action_space = env.action_space # 0 : short , 1 : long
     observation_space = env.observation_space # open, high, low, close, volume
 
     NB_ENV = 1
     EPSILON = 0.2
-    ROLLOUT_PERIOD = 2048
-    EPOCH = 6
-    ENTROPY_COEFF = 0.01
-    VALUE_COEFF = 1
+    ROLLOUT_PERIOD = 2048 #TODO : Changes
+    EPOCH = 6 #TODO : Changes
+    ENTROPY_COEFF = 0.005
+    VALUE_COEFF = 0.5
     GAMMA = 0.99
     LAMBDA = 0.95
     HIDDEN_DIM = 128
     BATCH_SIZE = 128
 
-    V_MIN, V_MAX = -50, 200
+    V_MIN, V_MAX = -300, 300
     NB_ATOMS = 51
     NORMALIZE_ADV = True
-    CLIP_VALUE = True
+    CLIP_VALUE = False
     MAX_GRAD_NORM = 1
-
 
 
     v_core_net = torch.nn.Sequential(
@@ -88,7 +87,8 @@ def main():
         policy_loss=PPOLoss(
             epsilon = EPSILON,
             entropy_loss_coeff=ENTROPY_COEFF,
-            values_loss_coeff=VALUE_COEFF,
+            value_loss= C51Loss(),
+            value_loss_coeff=VALUE_COEFF,
             clip_value_loss=CLIP_VALUE,
         ),
         rollout_period=ROLLOUT_PERIOD,

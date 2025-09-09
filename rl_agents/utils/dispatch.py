@@ -12,7 +12,6 @@ class dispatch:
             self.operations = operations
 
         def __set_name__(self, owner, name):
-            if not hasattr(owner, "DISPATCH_MAPPING") : owner.DISPATCH_MAPPING = {}
             for op in self.operations:
                 owner.DISPATCH_MAPPING[op] = self.fn
         def __call__(self, *args, **kwargs):
