@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import BaseAgent
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -9,7 +9,7 @@ import torch
 from abc import ABC, abstractmethod
 
 
-class AbstractValueAgent(AbstractAgent, ABC):
+class AbstractValueAgent(BaseAgent, ABC):
     def __init__(self, q_function : 'Q', nb_env : int, policy : 'AbstractPolicy'):
         super().__init__(nb_env = nb_env, policy = policy)
         self.q_function = q_function

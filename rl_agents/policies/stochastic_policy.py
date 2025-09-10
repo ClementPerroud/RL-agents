@@ -3,7 +3,7 @@ from collections import namedtuple
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from rl_agents.agent import AbstractAgent
+    from rl_agents.agent import BaseAgent
 
 import torch
 import math

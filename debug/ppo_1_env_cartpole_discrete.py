@@ -95,33 +95,31 @@ def main():
 
     episodes = 10000
     for i in range(0, episodes, 10):
-        sma_reward = 0
-        for _ in range(10):
-            agent.train()
-            episode_rewards = 0
-            episode_losses = []
-            episode_steps = 0
+        agent.train()
+        episode_rewards = 0
+        episode_losses = []
+        episode_steps = 0
 
-            truncated = False
-            done = False
-            state, infos = env.reset()
+        truncated = False
+        done = False
+        state, infos = env.reset()
+        
+        while not truncated and not done:
+            action, log_prob = agent.pick_action(state= state)
+            next_state, reward, done, truncated, infos = env.step(action = int(action))
+            episode_rewards += reward
             
-            while not truncated and not done:
-                action, log_prob = agent.pick_action(state= state)
-                next_state, reward, done, truncated, infos = env.step(action = int(action))
-                episode_rewards += reward
-                
-                agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated, log_prob=log_prob)
-                loss = agent.train_agent()
+            agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated, log_prob=log_prob)
+            loss = agent.train_agent()
 
-                if loss is not None: episode_losses.append(loss)
-                
-                episode_steps += 1
-                state = next_state
+            if loss is not None: episode_losses.append(loss)
+            
+            episode_steps += 1
+            state = next_state
 
-            sma_reward = episode_rewards * 0.2 + sma_reward * 0.8
-            episode_loss = np.array(episode_losses).mean() if len(episode_losses)>0 else np.nan
-            print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e}| Agent Step : {agent.step}")
+        sma_reward = episode_rewards * 0.2 + sma_reward * 0.8
+        episode_loss = np.array(episode_losses).mean() if len(episode_losses)>0 else np.nan
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e}| Agent Step : {agent.step}")
         
 
 if __name__ == "__main__":

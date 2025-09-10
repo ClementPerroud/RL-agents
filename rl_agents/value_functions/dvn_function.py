@@ -6,7 +6,7 @@ from rl_agents.utils.mode import eval_mode
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from rl_agents.agent import AbstractAgent
+    from rl_agents.agent import BaseAgent
 
 import torch
 
@@ -42,13 +42,19 @@ class DVN(AgentService, V, Trainable):
         return self.manager.get_net(target=target).V(state)
         # Return Q Values : [batch/nb_env]
 
-    # Loss config
-    def compute_loss_input(self, experience : Experience) -> torch.Tensor:
-        return self.V(experience.state)  # [batch/nb_env]
+    def compute_loss_input(self, experience : Experience, **kwargs) -> torch.Tensor:
+        return self.V(experience.state, **kwargs)
     
+
     @torch.no_grad()
-    def compute_loss_target(self, experience : Experience) -> torch.Tensor:
-        return experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state, target=True) # is meant to predict the end of the mathematical sequence
-    
+    def compute_loss_target(self, experience : Experience, **kwargs) -> torch.Tensor:
+        default_kwargs = {
+            "pick_action_kwargs":{ #passed to : V -> self.policy.pick_action
+                "get_net_kwargs": self.manager.compute_loss_target_default #passed to : self.policy.q_per_action = Q_per_paction
+            }
+        }
+        kwargs = {**kwargs, **default_kwargs}
+        return experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state, **kwargs)
+
     def compute_td_errors(self, loss_input : torch.Tensor, loss_target : torch.Tensor):
         return (loss_target - loss_input).abs()

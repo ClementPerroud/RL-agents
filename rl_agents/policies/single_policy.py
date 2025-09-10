@@ -1,5 +1,5 @@
 from rl_agents.policies.policy import AbstractPolicy
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import BaseAgent
 import numpy as np
 import torch
 

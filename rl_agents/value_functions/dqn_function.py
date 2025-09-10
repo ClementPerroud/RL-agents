@@ -9,7 +9,7 @@ from rl_agents.utils.mode import eval_mode
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from rl_agents.agent import AbstractAgent
+    from rl_agents.agent import BaseAgent
 
 from typing import Callable
 import torch
@@ -68,18 +68,16 @@ class DQN(DVN):
         if policy == None or policy == "best": self.policy = DiscreteBestQValuePolicy(q = self)
 
 
-    def Q(self, state: torch.Tensor, action: torch.Tensor, target = False, **kwargs) -> torch.Tensor: return self.manager.get_net(target = target).Q(state=state, action=action, **kwargs)
-    def Q_per_action(self, state : torch.Tensor, target = False,**kwargs): return self.manager.get_net(target =target).Q_per_action(state=state, **kwargs)
-    
-    def V(self, state: torch.Tensor, q_target = False, **kwargs) -> torch.Tensor:
-        action = self.policy.pick_action(state = state, **kwargs)
-        return self.Q(state=state, action=action, target = q_target)
+    def Q(self, state: torch.Tensor, action: torch.Tensor, get_net_kwargs : dict = {}, q_kwargs :dict = {}) -> torch.Tensor:
+        return self.manager.get_net(**get_net_kwargs).Q(state=state, action=action, **q_kwargs)
 
-    # Loss config
-    def compute_loss_input(self, experience : Experience) -> torch.Tensor: 
-        return self.Q(experience.state, experience.action)
+    def Q_per_action(self, state : torch.Tensor, get_net_kwargs : dict = {}, q_kwargs :dict = {}):
+        return self.manager.get_net(**get_net_kwargs).Q_per_action(state=state, **q_kwargs)
     
-    @torch.no_grad()
-    def compute_loss_target(self, experience : Experience) -> torch.Tensor:
-        return experience.reward + (1 - experience.done.float()) * self.gamma * self.V(experience.next_state, q_target = True)
+    def V(self, state: torch.Tensor, pick_action_kwargs : dict = {}, q_kwarks : dict = {}) -> torch.Tensor:
+        action = self.policy.pick_action(state = state, **pick_action_kwargs)
+        return self.Q(state=state, action=action, **q_kwarks)
 
+    def compute_loss_input(self, experience : Experience, **kwargs) -> torch.Tensor:
+        return self.Q(experience.state, experience.action, **kwargs)
+    

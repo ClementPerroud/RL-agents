@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import BaseAgent
 from rl_agents.service import AgentService
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.policies.policy import StochasticPolicy

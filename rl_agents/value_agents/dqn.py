@@ -3,7 +3,7 @@ from rl_agents.value_functions.value import Q, Trainable
 from rl_agents.policies.policy import Policy
 from rl_agents.value_agents.value_agent import AbstractValueAgent
 from rl_agents.memory.replay_memory import BaseExperienceMemory, MultiStepReplayMemory
-from rl_agents.memory.sampler import AbstractSampler
+from rl_agents.memory.sampler import Sampler, WeightableSampler, UpdatableSampler
 from rl_agents.utils.mode import eval_mode
 from rl_agents.utils.distribution.distribution import distribution_aware
 import torch
@@ -17,7 +17,7 @@ class DQNAgent(AbstractValueAgent):
         q_function : DQN,
         train_every : int,
         replay_memory : BaseExperienceMemory,
-        sampler : AbstractSampler,
+        sampler : Sampler,
         batch_size : int,
         optimizer : torch.optim.Optimizer,
         **kwargs
@@ -42,7 +42,7 @@ class DQNAgent(AbstractValueAgent):
             if self.nb_env == 1: experience_kwargs[key] = experience_kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
         
         indices = self.replay_memory.store(**experience_kwargs) # indices : [nb_env,]
-        if indices is not None: self.sampler.store(experience = self.replay_memory[indices],**experience_kwargs)
+        if indices is not None and isinstance(self.sampler, UpdatableSampler): self.sampler.store(experience = self.replay_memory[indices],**experience_kwargs)
 
     def train_agent(self) -> float:
         super().train_agent()
@@ -64,7 +64,9 @@ class DQNAgent(AbstractValueAgent):
         with eval_mode(self), torch.no_grad():
             loss_target = self.q_function.compute_loss_target(experience=experience)
         loss = self.q_function.loss_fn(loss_input, loss_target)
-        loss = self._apply_weights(loss, self.sampler.compute_weights_from_indices(experience.indices))
+
+        if isinstance(self.sampler, WeightableSampler):
+            loss = self.sampler.apply_weights(loss=loss, indices=experience.indices)
 
         loss = loss.mean()
 
@@ -72,10 +74,12 @@ class DQNAgent(AbstractValueAgent):
 
         self.optimizer.step()
 
-        with torch.no_grad():
-            self.sampler.update_experiences(
-                agent = self, indices = experience.indices, td_errors = self.q_function.compute_td_errors(loss_input=loss_input, loss_target=loss_target)
-            )
+        if isinstance(self.sampler, UpdatableSampler):
+            with torch.no_grad():
+                self.sampler.update_experiences(
+                    agent = self, indices = experience.indices, td_errors = self.q_function.compute_td_errors(loss_input=loss_input, loss_target=loss_target)
+                )
+    
         return loss.item()
         
     def _apply_weights(self, loss : torch.Tensor, weight : torch.Tensor | float |None):

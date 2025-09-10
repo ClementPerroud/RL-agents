@@ -1,12 +1,18 @@
 from rl_agents.policies.policy import Policy
 from rl_agents.service import AgentService
+from rl_agents.memory.memory import Memory
 
+from typing import Protocol, runtime_checkable
 from abc import ABC, abstractmethod
 import torch
 import numpy as np
 
+class Agent(Protocol):
+    memory: Memory
+    step : int
+    episode : int
 
-class AbstractAgent(Policy, AgentService, ABC):
+class BaseAgent(Policy, AgentService, ABC):
     def __init__(
         self,
         nb_env: int,
@@ -20,7 +26,7 @@ class AbstractAgent(Policy, AgentService, ABC):
         self.episode = 0
         self.step = 0
 
-    def update(self, agent : 'AbstractAgent'):
+    def update(self, agent : 'BaseAgent'):
         self.step += 1
 
     @abstractmethod

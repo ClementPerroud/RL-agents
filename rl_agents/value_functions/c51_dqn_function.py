@@ -114,36 +114,28 @@ class C51DQN(C51, DQN, Q, Trainable):
         super().__init__(net=net, gamma=gamma, loss_fn = loss_fn, policy=policy, manager=manager, nb_atoms=nb_atoms, v_min=v_min, v_max=v_max, **kwargs)
 
     @distribution_aware
-    def Q(self, state, action, target = False, **kwargs): return self.manager.get_net(target=target).Q(state, action, **kwargs)
+    def Q(self, state : torch.Tensor, action : torch.Tensor, get_net_kwargs : dict = {}, q_kwargs : dict = {}, **kwargs):
+        return super().Q(state=state, action=action, get_net_kwargs=get_net_kwargs, q_kwargs=q_kwargs, **kwargs)
 
     @distribution_aware
-    def Q_per_action(self, state, target = False, **kwargs): return self.manager.get_net(target=target).Q_per_action(state, **kwargs)
+    def Q_per_action(self, state : torch.Tensor, get_net_kwargs : dict = {}, q_kwargs : dict = {}, **kwargs):
+        return super().Q_per_action(state=state, get_net_kwargs=get_net_kwargs, q_kwargs=q_kwargs, **kwargs)
 
     @distribution_aware
-    def V(self, state: torch.Tensor, q_target = False, **kwargs) -> torch.Tensor:
+    def V(self, state: torch.Tensor, pick_action_kwargs : dict = {}, q_kwarks : dict = {}) -> torch.Tensor:
         with distribution_mode(False):
-            action = self.policy.pick_action(state = state, **kwargs)
-        return self.Q(state=state, action=action, target = q_target)
+            action = self.policy.pick_action(state = state, **pick_action_kwargs)
+        return self.Q(state=state, action=action, **q_kwarks)
 
     @distribution_aware
     def compute_td_errors(self, loss_input : Distribution, loss_target : Distribution):
         return (loss_input.expectation() - loss_target.expectation()).abs()
 
     @distribution_aware
-    def compute_loss_input(self, experience : Experience) -> torch.Tensor:
-        return self.Q(state=experience.state, action=experience.action)
+    def compute_loss_input(self, experience : Experience, **kwargs) -> torch.Tensor:
+        return super().compute_loss_input(experience=experience, **kwargs)
 
     @torch.no_grad()
     @distribution_aware
     def compute_loss_target(self, experience : Experience, **kwargs) -> None:
-        with distribution_mode(False):
-            a = self.policy.pick_action(state=experience.next_state, **kwargs)
-        p_next : Distribution= self.Q(state=experience.next_state, action = a, target=True) #[batch, nb_atoms]
-
-        # Distributions automatically handle operation on distributions.
-        dist_true = (
-            experience.reward.to(p_next.dtype) 
-            + ((1 - experience.done.to(p_next.dtype)) * self.gamma)* p_next
-        )
-        return dist_true
-
+        return super().compute_loss_target(experience = experience, **kwargs)

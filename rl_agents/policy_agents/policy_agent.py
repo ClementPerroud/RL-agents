@@ -1,11 +1,11 @@
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import BaseAgent
 from rl_agents.memory.replay_memory import ReplayMemory
 
 import torch
 from abc import ABC, abstractmethod
 
 
-class AbstractPolicyAgent(AbstractAgent, ABC):
+class AbstractPolicyAgent(BaseAgent, ABC):
     
     _rollout_memory = None
     @property

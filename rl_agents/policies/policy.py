@@ -8,7 +8,7 @@ import gymnasium as gym
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from rl_agents.agent import AbstractAgent
+    from rl_agents.agent import BaseAgent
 
 @runtime_checkable
 class Policy(Protocol):

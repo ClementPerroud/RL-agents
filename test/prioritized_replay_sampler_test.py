@@ -33,7 +33,6 @@ def test_sampler_random_fallback():
         sampler.priorities.add(1.0)
     sampler.step = 1
     batch, weights = sampler.sample(agent=agent, batch_size=2, size=10)
-    print(weights)
     assert torch.isclose(weights, torch.ones_like(weights)).all()
     assert len(batch) == 2
 

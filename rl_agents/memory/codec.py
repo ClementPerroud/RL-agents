@@ -15,7 +15,7 @@ class HasCodec(Protocol):
 
 class AutomaticCodecFactory:
     def generate_codec_from_item(self, val : object):
-        if isinstance(val,  HasCodec):
+        if isinstance(val, HasCodec):
             return val.get_codec()
         elif isinstance(val, torch.Tensor):
             return TensorCodec()

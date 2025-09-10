@@ -4,7 +4,7 @@ import torch
 from enum import Enum
 
 if TYPE_CHECKING:
-    from rl_agents.agent import AbstractAgent
+    from rl_agents.agent import BaseAgent
 
 
 class AgentService(torch.nn.Module, ABC):

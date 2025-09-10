@@ -1,4 +1,4 @@
-from rl_agents.agent import AbstractAgent
+from rl_agents.agent import BaseAgent
 from rl_agents.service import AgentService
 
 from copy import deepcopy
@@ -12,16 +12,20 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class TargetManager(Protocol):
+    compute_loss_target_default : dict
     def set_net(self, net :"V"):...
     def get_net(self, *args, **kwargs):...
 
 
 class VManager(AgentService):
+    compute_loss_target_default = {}
     def set_net(self, net :"V"): self.net = net
     def get_net(self, *args, **kwargs): return self.net
 
 
 class DoubleVManager(VManager):
+    compute_loss_target_default = {"target" : True}
+    
     def __init__(
         self,
         tau: int,
@@ -50,7 +54,7 @@ class DoubleVManager(VManager):
                 self._bootstrapped = True
             
     @torch.no_grad()
-    def update(self, agent: AbstractAgent):
+    def update(self, agent: BaseAgent):
         self.initialize_target_if_needed()
 
         if self._bootstrapped and agent.step % self.tau == 0:
@@ -85,7 +89,7 @@ class SoftDoubleVManager(DoubleVManager):
         self.tau_rate = 1.0/float(self.tau)
 
     @torch.no_grad()
-    def update(self, agent: AbstractAgent):
+    def update(self, agent: BaseAgent):
         self.initialize_target_if_needed()
         if self._bootstrapped:
             net_target_state_dict = self.net_target.state_dict()

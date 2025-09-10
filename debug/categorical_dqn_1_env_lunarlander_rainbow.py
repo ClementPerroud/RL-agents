@@ -13,6 +13,7 @@ from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler
+from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
 from rl_agents.value_functions.c51_dqn_function import C51DQN, DiscreteC51Wrapper
 from rl_agents.value_agents.dqn import DQNAgent
 
@@ -40,7 +41,8 @@ def main():
 
     V_MIN, V_MAX = -300, 300
     NB_ATOMS = 51
-
+    NOISY_STD = 0.1
+    
     replay_memory = MultiStepReplayMemory(
         max_length = MEMORY_SIZE,
         observation_space= observation_space,
@@ -54,6 +56,7 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
     )
+    core_net = NoisyNetTransformer(std_init=NOISY_STD)(core_net)
     q_net = DiscreteC51Wrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
     q_manager = SoftDoubleVManager(
         tau= TAU
