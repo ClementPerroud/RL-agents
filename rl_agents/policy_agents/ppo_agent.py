@@ -2,9 +2,9 @@ from rl_agents.agent import AbstractAgent
 from rl_agents.service import AgentService
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.policies.policy import StochasticPolicy
-from rl_agents.replay_memory.sampler import RandomSampler
+from rl_agents.memory.sampler import RandomSampler
 from rl_agents.value_functions.value import V
-from rl_agents.replay_memory.rollout_memory import RolloutMemory
+from rl_agents.memory.rollout_memory import RolloutMemory
 from rl_agents.policy_agents.advantage_function import BaseAdvantageFunction
 from rl_agents.utils.collates import do_nothing_collate
 from rl_agents.utils.distribution.distribution import Distribution, distribution_aware, distribution_mode, debug_mode

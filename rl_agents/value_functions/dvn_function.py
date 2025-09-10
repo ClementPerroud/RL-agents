@@ -1,7 +1,7 @@
-from rl_agents.replay_memory.replay_memory import ReplayMemory, ExperienceSample, Experience
+from rl_agents.memory.memory import Experience
 from rl_agents.service import AgentService
-from rl_agents.value_functions.value import V, Trainable
 from rl_agents.value_functions.value_manager import VManager
+from rl_agents.value_functions.value import V, Trainable
 from rl_agents.utils.mode import eval_mode
 
 from typing import TYPE_CHECKING
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 import torch
 
-class VWrapper(V):
+class VWrapper(AgentService):
     def __init__(self, core_net : torch.nn.Module):
         super().__init__()
         self.core_net = core_net
@@ -21,7 +21,7 @@ class VWrapper(V):
         return self.head(x).squeeze(1)
 
 
-class DVN(V, Trainable):
+class DVN(AgentService, V, Trainable):
     def __init__(self,
             net : AgentService,
             gamma : float,

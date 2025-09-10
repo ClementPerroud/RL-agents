@@ -11,8 +11,8 @@ from rl_agents.service import AgentService
 from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
-from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
-from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
+from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
+from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_functions.dqn_function import DQN, DiscreteQWrapper
 from rl_agents.value_agents.dqn import DQNAgent
 

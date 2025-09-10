@@ -1,8 +1,8 @@
 import numpy as np
 from gymnasium.spaces import Box
 
-from rl_agents.replay_memory.replay_memory import MultiStepReplayMemory
-from rl_agents.replay_memory.sampler import RandomSampler
+from rl_agents.memory.replay_memory import MultiStepReplayMemory
+from rl_agents.memory.sampler import RandomSampler
 
 
 class DummyAgent:

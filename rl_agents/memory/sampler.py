@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional, Callable
 
 if TYPE_CHECKING:
     from rl_agents.agent import AbstractAgent
-    from rl_agents.replay_memory.replay_memory import BaseReplayMemory
+    from rl_agents.memory.replay_memory import BaseExperienceMemory
 
 
 class AbstractSampler(AgentService, ABC):
@@ -28,7 +28,7 @@ class AbstractSampler(AgentService, ABC):
     def update_experiences(self, **kwargs): ...
 
 class RandomSampler(AbstractSampler):
-    def __init__(self, replay_memory : "BaseReplayMemory"):
+    def __init__(self, replay_memory : "BaseExperienceMemory"):
         super().__init__()
         self.replay_memory = replay_memory
 
@@ -46,7 +46,7 @@ class RandomSampler(AbstractSampler):
     
 
 class LastSampler(AbstractSampler):
-    def __init__(self, replay_memory : "BaseReplayMemory"):
+    def __init__(self, replay_memory : "BaseExperienceMemory"):
         super().__init__()
         self.replay_memory = replay_memory
 
@@ -66,7 +66,7 @@ class LastSampler(AbstractSampler):
 
 
 class PrioritizedReplaySampler(AbstractSampler):
-    def __init__(self, replay_memory: "BaseReplayMemory", service : Trainable, alpha=0.65, beta_0=0.5, duration=150_000):
+    def __init__(self, replay_memory: "BaseExperienceMemory", service : Trainable, alpha=0.65, beta_0=0.5, duration=150_000):
         assert isinstance(service, Trainable), "Provided service must implement Trainable."
         super().__init__()
         self.replay_memory = replay_memory

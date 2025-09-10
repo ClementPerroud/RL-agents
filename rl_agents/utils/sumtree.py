@@ -91,6 +91,7 @@ class SumTree:
             raise IndexError(f"Cannot set value at index {i} (current length = {self.length})")
         self._update_leaf(i, float(value))
 
+    @torch.no_grad()
     def __getitem__(self, idx):
         """
         Read leaf priority (or priorities).
@@ -104,6 +105,7 @@ class SumTree:
             i = int(idx)
             return float(self.tree[self.leaf_start + i])
 
+    @torch.no_grad()
     def sum(self) -> float:
         """Total priority (value at the root)."""
         return float(self.tree[0])
@@ -154,6 +156,7 @@ class SumTree:
         return out
 
     # (Optional) helpers
+    @torch.no_grad()
     def __len__(self) -> int:
         return self.length
 

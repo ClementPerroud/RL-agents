@@ -2,8 +2,8 @@ from rl_agents.value_functions.dqn_function import DQN
 from rl_agents.value_functions.value import Q, Trainable
 from rl_agents.policies.policy import Policy
 from rl_agents.value_agents.value_agent import AbstractValueAgent
-from rl_agents.replay_memory.replay_memory import BaseReplayMemory, MultiStepReplayMemory
-from rl_agents.replay_memory.sampler import AbstractSampler
+from rl_agents.memory.replay_memory import BaseExperienceMemory, MultiStepReplayMemory
+from rl_agents.memory.sampler import AbstractSampler
 from rl_agents.utils.mode import eval_mode
 from rl_agents.utils.distribution.distribution import distribution_aware
 import torch
@@ -16,7 +16,7 @@ class DQNAgent(AbstractValueAgent):
         policy: Policy,
         q_function : DQN,
         train_every : int,
-        replay_memory : BaseReplayMemory,
+        replay_memory : BaseExperienceMemory,
         sampler : AbstractSampler,
         batch_size : int,
         optimizer : torch.optim.Optimizer,

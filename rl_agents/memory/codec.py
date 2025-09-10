@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 if TYPE_CHECKING: 
-    from rl_agents.replay_memory.memory import MemoryField
+    from rl_agents.memory.memory import MemoryField
     
 
 from typing import Protocol, runtime_checkable, Any, Tuple, Type

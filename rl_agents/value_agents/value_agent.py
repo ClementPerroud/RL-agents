@@ -3,7 +3,7 @@ from rl_agents.agent import AbstractAgent
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rl_agents.policies.policy import AbstractPolicy
-    from rl_agents.value_functions.q_function import Q
+    from rl_agents.value_functions.value import Q
 
 import torch
 from abc import ABC, abstractmethod

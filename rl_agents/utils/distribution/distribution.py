@@ -10,7 +10,7 @@ from functools import wraps
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rl_agents.replay_memory.memory import MemoryField
+    from rl_agents.memory.memory import MemoryField
 
 
 

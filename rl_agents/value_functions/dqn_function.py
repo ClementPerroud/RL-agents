@@ -1,6 +1,6 @@
 from rl_agents.value_functions.dvn_function import DVN
 from rl_agents.policies.policy import Policy
-from rl_agents.replay_memory.replay_memory import ReplayMemory, ExperienceSample, Experience
+from rl_agents.memory.memory import Experience
 from rl_agents.service import AgentService
 from rl_agents.value_functions.value import Q, V, Trainable
 from rl_agents.value_functions.value_manager import VManager
@@ -16,7 +16,7 @@ import torch
 import gymnasium as gym
 
 
-class ContinuousQWrapper(Q):
+class ContinuousQWrapper(Q, AgentService):
     def __init__(self, core_net : torch.nn.Module, action_space : gym.spaces.Box):
         super().__init__()
         # Core net : 
@@ -31,7 +31,7 @@ class ContinuousQWrapper(Q):
 
     def Q_per_action(self, *args, **kwargs): raise ValueError("Continuous action cannot use Q_per_action.")
 
-class DiscreteQWrapper(Q):
+class DiscreteQWrapper(Q, AgentService):
     def __init__(self, core_net : torch.nn.Module, action_space : gym.spaces.Discrete):
         super().__init__()
         self.core_net = core_net
@@ -49,7 +49,7 @@ class DiscreteQWrapper(Q):
         return torch.gather(input=value_per_action, dim = 1, index= action.long().unsqueeze(-1)).squeeze(-1) # [B]
 
 
-class DQN(DVN, Q, V, Trainable):
+class DQN(DVN):
     def __init__(self,
             net : Q,
             gamma : float,

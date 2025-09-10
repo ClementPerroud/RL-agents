@@ -19,6 +19,7 @@ class NoisyNetTransformer(AgentService):
 
     def _patch(self, module: nn.Module):
         for name, child in list(module.named_children()):
+            print(child)
             if isinstance(child, nn.LazyLinear) and not isinstance(child, NoisyLazyLinear):
                 noisy = NoisyLazyLinear(
                     out_features=child.out_features,

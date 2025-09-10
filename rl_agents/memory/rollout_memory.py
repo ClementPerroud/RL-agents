@@ -1,11 +1,11 @@
-from rl_agents.replay_memory.replay_memory import BaseReplayMemory
-from rl_agents.replay_memory.codec import TensorCodec
-from rl_agents.replay_memory.replay_memory import MemoryField
+from rl_agents.memory.replay_memory import BaseExperienceMemory
+from rl_agents.memory.codec import TensorCodec
+from rl_agents.memory.replay_memory import MemoryField
 
 import torch
 from gymnasium.spaces import Space, Box
 
-class RolloutMemory(BaseReplayMemory):
+class RolloutMemory(BaseExperienceMemory):
     def __init__(
         self,
         max_length: int,

@@ -11,9 +11,9 @@ from rl_agents.service import AgentService
 from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
-from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
-from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler, LastSampler
-from rl_agents.value_functions.c51_dqn_function import C51DQN, DiscreteC51QWrapper
+from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
+from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, LastSampler
+from rl_agents.value_functions.c51_dqn_function import C51DQN, DiscreteC51Wrapper
 from rl_agents.value_agents.dqn import DQNAgent
 
 import torch
@@ -79,7 +79,7 @@ def main():
         torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM), torch.nn.ReLU()
     )
 
-    q_net = DiscreteC51QWrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
+    q_net = DiscreteC51Wrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
     
     q_function = C51DQN(
         net=q_net,

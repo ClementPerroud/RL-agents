@@ -10,11 +10,11 @@ if __name__ == "__main__":
 from rl_agents.service import AgentService
 from rl_agents.value_functions.value_manager import  SoftDoubleVManager
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
-from rl_agents.replay_memory.replay_memory import ReplayMemory, MultiStepReplayMemory
-from rl_agents.replay_memory.sampler import PrioritizedReplaySampler, RandomSampler
+from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
+from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
 from rl_agents.value_agents.dqn import DQNAgent
-from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, DiscreteC51QWrapper
+from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, DiscreteC51Wrapper
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 
 import torch
@@ -49,7 +49,7 @@ def main():
         torch.nn.LazyLinear(HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.LazyLinear(HIDDEN_DIM), torch.nn.ReLU()
     )
-    q_net = DiscreteC51QWrapper(core_net=core_net, action_space=action_space, nb_atoms=NB_ATOMS, v_min=V_MIN, v_max=V_MAX)
+    q_net = DiscreteC51Wrapper(core_net=core_net, action_space=action_space, nb_atoms=NB_ATOMS, v_min=V_MIN, v_max=V_MAX)
     q_net = NoisyNetTransformer(std_init=0.1)(q_net)
     q_manager = SoftDoubleVManager(
         tau= 50

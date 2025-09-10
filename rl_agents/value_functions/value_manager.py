@@ -6,13 +6,20 @@ import torch
 from torch.nn.modules.lazy import LazyModuleMixin
 from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from rl_agents.value_functions.dqn_function import V
+
+@runtime_checkable
+class TargetManager(Protocol):
+    def set_net(self, net :"V"):...
+    def get_net(self, *args, **kwargs):...
+
 
 class VManager(AgentService):
     def set_net(self, net :"V"): self.net = net
     def get_net(self, *args, **kwargs): return self.net
+
 
 class DoubleVManager(VManager):
     def __init__(

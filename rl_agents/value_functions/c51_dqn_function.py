@@ -1,16 +1,15 @@
 from rl_agents.value_functions.dqn_function import DQN, Q, Trainable
 from rl_agents.value_functions.value_manager import VManager
-from rl_agents.replay_memory.replay_memory import ExperienceSample, Experience
+from rl_agents.memory.memory import Experience
 from rl_agents.policies.policy import Policy
 from rl_agents.service import AgentService
-from rl_agents.utils.mode import eval_mode
 from rl_agents.utils.distribution.distribution import Distribution, LinearAtomConfig, distribution_aware, distribution_mode
 import torch
 import matplotlib.pyplot as plt
 import gymnasium as gym 
-from abc import ABC, abstractmethod
+from abc import ABC
 
-class C51Q(Q, ABC):
+class C51(AgentService, ABC):
     def __init__(self,
             nb_atoms : int,
             v_min : float,
@@ -24,7 +23,7 @@ class C51Q(Q, ABC):
         self.atom_config = LinearAtomConfig(nb_atoms=nb_atoms, v_min=v_min, v_max=v_max)
         
 
-class ContinuousC51QWrapper(C51Q, Trainable):
+class ContinuousC51Wrapper(C51, Q, Trainable):
     def __init__(self,
             core_net : torch.nn.Module,
             action_space : gym.spaces.Box,
@@ -49,8 +48,10 @@ class ContinuousC51QWrapper(C51Q, Trainable):
         dist = self.head(x).softmax(dim = -1)
         return Distribution(dist, atom_config=self.atom_config)
         # output : [B, Atoms]
+    
+    def Q_per_action(self, *args, **kwargs): raise ValueError("Continuous action cannot use Q_per_action.")
 
-class DiscreteC51QWrapper(C51Q):
+class DiscreteC51Wrapper(C51):
     def __init__(self,
             core_net : torch.nn.Module,
             action_space : gym.spaces.Discrete,
@@ -96,7 +97,7 @@ class C51Loss(torch.nn.modules.loss._Loss):
         input = input.clamp(min=1E-8, max = 1E8)
         return -(target * torch.log(input)).sum(-1)
 
-class C51DQN(C51Q, DQN):
+class C51DQN(C51, DQN, Q, Trainable):
     def __init__(self,
             nb_atoms : int,
             v_min : float,
@@ -108,7 +109,7 @@ class C51DQN(C51Q, DQN):
             manager : VManager = VManager(),
             **kwargs
         ):
-        assert isinstance(net, C51Q), "net must implement C51Q"
+        assert isinstance(net, C51), "net must implement C51"
         # super().__init__(nb_atoms=nb_atoms, v_min=v_min, v_max=v_max, net=net, gamma=gamma, loss_fn = loss_fn, policy=policy, manager=manager)
         super().__init__(net=net, gamma=gamma, loss_fn = loss_fn, policy=policy, manager=manager, nb_atoms=nb_atoms, v_min=v_min, v_max=v_max, **kwargs)
 

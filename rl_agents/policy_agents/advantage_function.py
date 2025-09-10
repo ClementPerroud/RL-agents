@@ -2,9 +2,9 @@ from rl_agents.value_functions.dqn_function import DVN
 from rl_agents.policy_agents.policy_agent import AbstractPolicyAgent
 from rl_agents.agent import AbstractAgent
 from rl_agents.service import AgentService
-from rl_agents.replay_memory.replay_memory import ExperienceSample
-from rl_agents.replay_memory.memory import MemoryField
-from rl_agents.replay_memory.codec import AutomaticCodecFactory
+from rl_agents.memory.replay_memory import ExperienceSample
+from rl_agents.memory.memory import MemoryField
+from rl_agents.memory.codec import AutomaticCodecFactory
 from rl_agents.utils.collates import do_nothing_collate
 from rl_agents.utils.distribution.distribution import Distribution, distribution_aware, distribution_mode
 import warnings
