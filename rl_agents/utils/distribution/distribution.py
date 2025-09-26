@@ -1,4 +1,4 @@
-from rl_agents.utils.dispatch import dispatch
+from rl_agents.utils.distribution.dispatch import dispatch
 from rl_agents.utils.distribution.atom_config import AtomConfig, BaseAtomConfig, LinearAtomConfig
 
 import torch
@@ -102,8 +102,6 @@ class Distribution(torch.Tensor):
     def to_tensor(self, **kwargs):
         with torch._C._DisableTorchDispatch():
             return self.as_subclass(torch.Tensor, **kwargs)
-        
-
 
     def expectation(self) -> torch.Tensor:
         atoms = self._spec.atom_config.get_atoms(dtype=self.dtype, device=self.device)
@@ -233,40 +231,6 @@ class Distribution(torch.Tensor):
     def _std(input : 'Distribution', **kwargs):
         return torch.std(input=input.expectation(), **kwargs)
 
-    @staticmethod
-    def _dimension_reduction(func, input : 'Distribution', dim = None, *args, **kwargs):
-        last_dim = input.ndim-1
-        if dim is None:
-            dim = list(range(0,last_dim))
-        elif isinstance(dim, tuple) or isinstance(dim, list):
-            dim = list(dim)
-            for i, d in enumerate(dim):
-                if d < 0: d = last_dim + d
-                if d < 0 or last_dim <= d: raise ValueError(f"Dimension {dim[i]} is invalid. Dimensions must be between 0 (included) and {last_dim} (included ; atom dim can not be reduced).")
-                dim[i] = d
-        elif isinstance(dim, int):
-            if dim < 0 or last_dim <= dim: raise ValueError(f"Dimension {dim[i]} is invalid. Dimensions must be between 0 (included) and {last_dim} (included ; atom dim can not be reduced).")
-    
-        return input._post_process_return(
-            data = func(input.to_tensor(), dim = dim, *args, **kwargs)
-        )
-
-    SHAPE_OR_MUT_OPS = {
-        # torch.ops.aten.view,
-        # torch.ops.aten.reshape,
-        # torch.ops.aten._unsafe_view,
-        # torch.ops.aten.expand,
-        # torch.ops.aten.permute,
-        # torch.ops.aten.transpose,
-        # torch.ops.aten.unsqueeze,
-        # torch.ops.aten.squeeze,
-        # torch.ops.aten.copy_,
-        # torch.ops.aten.index_put,
-        # torch.ops.aten.slice_scatter,
-        # torch.ops.aten.scatter,
-        # torch.ops.aten.scatter_,
-        # add others you hit in practice
-    }
 
     @classmethod
     @debug_dispatch
@@ -285,34 +249,12 @@ class Distribution(torch.Tensor):
             #  1 - converting distribution to Tensor
             #  2 - using the original method
             #  3 - rewrapping the returned Tensor into a Distribution
-            args = list(args)
-            _spec = None
-            for i, arg in enumerate(args): 
-                if isinstance(arg, Distribution):
-                    args[i] = arg.to_tensor()
-                    if _spec is None: _spec=arg._spec
-            for key, arg in kwargs.items():
-                if isinstance(arg, Distribution):
-                    kwargs[key] = arg.to_tensor()
-                    if _spec is None: _spec=arg._spec
-            
+            args, kwargs, _spec= normalize_args_kwargs(args=list(args), kwargs=kwargs, conversion_method="to_tensor")
             returned_tensor = func(*args, **kwargs)
             return _spec.create_distribution(data=returned_tensor)
         
         else:
-            # mode_dist DESACTIVED : We convert distribution to their expectation, and go back working with Tensor.
-            # if base_func in cls.SHAPE_OR_MUT_OPS:
-            #     args2 = [a.to_tensor() if isinstance(a, Distribution) else a for a in args]
-            #     kwargs2 = {k: (v.to_tensor() if isinstance(v, Distribution) else v) for k, v in kwargs.items()}
-            #     return func(*args2, **kwargs2)
-
-            args = list(args)
-            for i, arg in enumerate(args): 
-                if isinstance(arg, Distribution):
-                    args[i] = arg.expectation()
-            for key, arg in kwargs.items():
-                if isinstance(arg, Distribution):
-                    kwargs[key] = arg.expectation()
+            args, kwargs, _spec= normalize_args_kwargs(args=list(args), kwargs=kwargs, conversion_method="expectation")
             return func(*args, **kwargs)
     
     def get_codec(self):
@@ -351,7 +293,33 @@ class DistributionCodec:
     def decode(self, tensor, field : "MemoryField"):
         # Wrap back as Distribution for consumers
         return Distribution(tensor, atom_config=self.spec.atom_config, keep_config=self.spec.keep_config)
-    
+
+
+def _replace_distributions(obj: Any, conversion_method : str,*, _spec: DistSpec = [None]) -> Any:
+    if isinstance(obj, Distribution):
+        if _spec[0] is None: _spec[0] = obj._spec
+        elif _spec[0] != obj._spec: obj = obj.project_on(atom_config=obj._spec.atom_config)
+        return getattr(obj, conversion_method)()
+
+    if isinstance(obj, tuple):      return tuple(_replace_distributions(x, conversion_method=conversion_method, _spec=_spec) for x in obj)
+    if isinstance(obj, list):       return [_replace_distributions(x, conversion_method=conversion_method, _spec=_spec) for x in obj]
+    if isinstance(obj, dict):       return {k: _replace_distributions(v, conversion_method=conversion_method, _spec=_spec) for k, v in obj.items()}
+    if isinstance(obj, set):        return {_replace_distributions(x, conversion_method=conversion_method, _spec=_spec) for x in obj}
+    if isinstance(obj, frozenset):  return frozenset(_replace_distributions(x, conversion_method=conversion_method, _spec=_spec) for x in obj)
+
+    # 6) Anything else: leave as is
+    return obj
+
+
+def normalize_args_kwargs(args: tuple[Any, ...], kwargs: dict[str, Any], conversion_method : str) -> tuple[tuple[Any, ...], dict[str, Any], DistSpec]:
+    spec = [None]  # mutable holder so recursion can set it once
+
+    new_args = _replace_distributions(args, conversion_method=conversion_method, _spec=spec)
+    new_kwargs = _replace_distributions(kwargs, conversion_method=conversion_method, _spec=spec)
+
+    return new_args, new_kwargs, spec[0]
+
+
 def main():
     _DIST_MODE.set(True)
     t1 = Distribution([[0.1, 0.2, 0.4, 0.2, 0.1]], atom_config=LinearAtomConfig(v_min = -10, v_max = 10, nb_atoms=5), requires_grad = True)
@@ -374,3 +342,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

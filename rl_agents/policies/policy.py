@@ -12,19 +12,15 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class Policy(Protocol):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
+    def __init__(self, **kwargs): super().__init__(**kwargs)
     def pick_action(self, state: torch.Tensor) -> torch.Tensor: ...
 
 @runtime_checkable
 class StochasticPolicy(Policy, Protocol):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def action_distributions(self, state : torch.Tensor):...
-    def evaluate_log_prob(self, action_distributions : torch.Tensor, action : torch.Tensor):...
-    def entropy_loss(self, action_probs : torch.Tensor):...
+    def __init__(self, **kwargs): super().__init__(**kwargs)
+    def action_distributions(self, state : torch.Tensor) -> torch.Tensor:...
+    def evaluate_log_prob(self, action_distributions : torch.Tensor, action : torch.Tensor) -> torch.Tensor:...
+    def entropy_loss(self, action_probs : torch.Tensor) -> torch.Tensor:...
     
 
 class DiscretePolicy(AgentService, Policy, ABC):
@@ -43,6 +39,8 @@ class DiscretePolicy(AgentService, Policy, ABC):
         return self.head(x)
 
 class ContinuousPolicy(AgentService, Policy, ABC):
+    LOG_STD_MIN, LOG_STD_MAX = -2, 5
+    EPS = 1E-6
     def __init__(self, core_net : torch.nn.Module, action_space : gym.spaces.Box, **kwargs):
         assert isinstance(action_space, gym.spaces.Box), "action_space only support gym.spaces.Box"
         super().__init__(**kwargs)

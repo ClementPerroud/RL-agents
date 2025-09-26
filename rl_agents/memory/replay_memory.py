@@ -15,22 +15,24 @@ class ReplayMemory(BaseExperienceMemory):
         self,
         max_length: int,
         observation_space: Space,
+        action_space : Space,
         device: torch.DeviceObjType = None,
     ):
         assert isinstance(
             observation_space, Box
         ), "ReplayMemory only supports gymnasium.spaces.Box as observation_space"
         self.observation_space = observation_space
+        self.action_space = action_space
 
         super().__init__(
             max_length=max_length,
             fields=[
-                MemoryField("state",       self.observation_space.shape,   torch.float32),
-                MemoryField("action",      (),                             torch.long),
-                MemoryField("next_state",  self.observation_space.shape,   torch.float32),
-                MemoryField("reward",      (),                             torch.float32),
-                MemoryField("done",        (),                             torch.bool),
-                MemoryField("truncated",   (),                             torch.bool),
+                MemoryField("state",       self.observation_space.shape,    torch.float32),
+                MemoryField("action",      self.action_space.shape,         torch.float32),
+                MemoryField("next_state",  self.observation_space.shape,    torch.float32),
+                MemoryField("reward",      (),                              torch.float32),
+                MemoryField("done",        (),                              torch.bool),
+                MemoryField("truncated",   (),                              torch.bool),
             ],
             device=device,
         )
@@ -46,6 +48,7 @@ class MultiStepReplayMemory(BaseExperienceMemory):
         self,
         max_length: int,
         observation_space: Box,
+        action_space : Space,
         nb_env: int,
         gamma: float,
         multi_step: int,
@@ -58,16 +61,17 @@ class MultiStepReplayMemory(BaseExperienceMemory):
         assert isinstance(observation_space, Box)
         self.multi_step, self.gamma, self.nb_env = multi_step, gamma, nb_env
         self.buffers = [deque(maxlen=multi_step) for _ in range(nb_env)]
+        self.action_space = action_space
 
         super().__init__(
             max_length=max_length,
             fields=[
-                MemoryField("state",       observation_space.shape,    torch.float32),
-                MemoryField("action",      (),                         torch.long),
-                MemoryField("next_state",  observation_space.shape,    torch.float32),
-                MemoryField("reward",      (),                         torch.float32),
-                MemoryField("done",        (),                         torch.bool),
-                MemoryField("truncated",   (),                         torch.bool),
+                MemoryField("state",       observation_space.shape,     torch.float32),
+                MemoryField("action",      self.action_space.shape,     torch.float32),
+                MemoryField("next_state",  observation_space.shape,     torch.float32),
+                MemoryField("reward",      (),                          torch.float32),
+                MemoryField("done",        (),                          torch.bool),
+                MemoryField("truncated",   (),                          torch.bool),
             ],
             device=device,
         )

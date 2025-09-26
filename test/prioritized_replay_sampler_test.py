@@ -5,7 +5,7 @@ from rl_agents.memory.sampler import PrioritizedReplaySampler
 
 class DummyAgent:
     def __init__(self):
-        self.step = 0
+        self.nb_step = 0
         self.training = True
 
 
@@ -31,7 +31,7 @@ def test_sampler_random_fallback():
     sampler = PrioritizedReplaySampler(max_length=10, duration=1)
     for _ in range(10):
         sampler.priorities.add(1.0)
-    sampler.step = 1
+    sampler.nb_step = 1
     batch, weights = sampler.sample(agent=agent, batch_size=2, size=10)
     assert torch.isclose(weights, torch.ones_like(weights)).all()
     assert len(batch) == 2

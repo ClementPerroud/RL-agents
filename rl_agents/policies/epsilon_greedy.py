@@ -1,6 +1,7 @@
 from rl_agents.agent import BaseAgent
 from rl_agents.service import AgentService
 from rl_agents.policies.policy import Policy
+
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
@@ -47,7 +48,7 @@ class BaseEspilonGreedyPolicy(Policy, AgentService, ABC):
 
         return actions
 
-    def update(self, agent: BaseAgent):
+    def update(self, agent: BaseAgent, **kwargs):
         self.epsilon = self.epsilon_function(agent=agent)
 
 
@@ -59,4 +60,4 @@ class EspilonGreedyPolicy(BaseEspilonGreedyPolicy):
         self.end_epsilon = end_epsilon
     
     def epsilon_function(self, agent):
-        return self.end_epsilon + (self.start_epsilon - self.end_epsilon) * math.exp(- agent.step / self.epsilon_decay)
+        return self.end_epsilon + (self.start_epsilon - self.end_epsilon) * math.exp(- agent.nb_step / self.epsilon_decay)

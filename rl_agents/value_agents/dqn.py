@@ -47,7 +47,7 @@ class DQNAgent(AbstractValueAgent):
     def train_agent(self) -> float:
         super().train_agent()
         
-        if self.step % self.train_every == 0 and self.step > self.batch_size:
+        if self.nb_step % self.train_every == 0 and self.nb_step > self.batch_size:
             # Training Q function
             loss = self.train_step()
             return loss

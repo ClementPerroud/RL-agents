@@ -8,7 +8,7 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
+from rl_agents.value_functions.target_manager import  SoftDoubleVManager, DoubleVManager
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
@@ -115,7 +115,7 @@ def main():
         
         while not truncated and not done:
             action = agent.pick_action(state= state)
-            if agent.step == 1:
+            if agent.nb_step == 1:
                 for module in q_net.modules():
                     if isinstance(module, torch.nn.Linear):
                         module.weight.data.fill_(1)
@@ -139,7 +139,7 @@ def main():
 
         epsilon = policy.epsilon
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Epsilon : {epsilon : 0.2f} | Agent Step : {agent.nb_step}")
         # print(episode_losses)
 
 if __name__ == "__main__":

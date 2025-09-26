@@ -7,7 +7,7 @@ from rl_agents.memory.sampler import RandomSampler
 
 class DummyAgent:
     def __init__(self):
-        self.step = 0
+        self.nb_step = 0
         self.training = True
 
 

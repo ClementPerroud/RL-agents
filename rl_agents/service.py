@@ -10,12 +10,6 @@ if TYPE_CHECKING:
 class AgentService(torch.nn.Module, ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-
-    def __update__(self, **kwargs):
-        self.update(**kwargs)
-        for element in self.children():
-            if isinstance(element, AgentService):
-                element.__update__(**kwargs)
         
     def update(self, **kwargs): ...
+    def reset(self, **kwargs): ...

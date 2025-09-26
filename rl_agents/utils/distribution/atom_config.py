@@ -1,6 +1,6 @@
 from torch.overrides import resolve_name
 from rl_agents.utils.class_analysis import instrument_methods
-from rl_agents.utils.dispatch import dispatch
+from rl_agents.utils.distribution.dispatch import dispatch
 
 import sys
 import torch

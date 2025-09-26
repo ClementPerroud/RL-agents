@@ -8,7 +8,7 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
+from rl_agents.value_functions.target_manager import  SoftDoubleVManager, DoubleVManager
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
@@ -19,7 +19,7 @@ from rl_agents.value_agents.dqn import DQNAgent
 from rl_agents.policy_agents.ppo_agent import A2CAgent, PPOLoss
 from rl_agents.policies.stochastic_policy import DiscreteStochasticPolicy
 from rl_agents.value_functions.dvn_function import DVN, VWrapper
-from rl_agents.policy_agents.advantage_function import GAEFunction
+from rl_agents.critics.advantage_function import GAEFunction
 
 import torch
 import numpy as np
@@ -119,7 +119,7 @@ def main():
 
         sma_reward = episode_rewards * 0.2 + sma_reward * 0.8
         episode_loss = np.array(episode_losses).mean() if len(episode_losses)>0 else np.nan
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e}| Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e}| Agent Step : {agent.nb_step}")
         
 
 if __name__ == "__main__":

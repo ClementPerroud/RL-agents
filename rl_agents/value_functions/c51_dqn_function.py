@@ -1,15 +1,24 @@
 from rl_agents.value_functions.dqn_function import DQN, Q, Trainable
-from rl_agents.value_functions.value_manager import VManager
-from rl_agents.memory.memory import Experience
+from rl_agents.value_functions.value import Op
+from rl_agents.memory.memory import Experience, Memory
+from rl_agents.memory.sampler import RandomSampler
 from rl_agents.policies.policy import Policy
 from rl_agents.service import AgentService
-from rl_agents.utils.distribution.distribution import Distribution, LinearAtomConfig, distribution_aware, distribution_mode
+from rl_agents.utils.distribution.distribution import Distribution, LinearAtomConfig, BaseAtomConfig, distribution_aware, distribution_mode
 import torch
 import matplotlib.pyplot as plt
 import gymnasium as gym 
 from abc import ABC
+from typing import Protocol, runtime_checkable
 
-class C51(AgentService, ABC):
+@runtime_checkable
+class C51(Protocol):
+    nb_atoms : int
+    v_min : float
+    v_max : float
+    atom_config : BaseAtomConfig
+
+class BaseC51(AgentService, ABC):
     def __init__(self,
             nb_atoms : int,
             v_min : float,
@@ -23,7 +32,7 @@ class C51(AgentService, ABC):
         self.atom_config = LinearAtomConfig(nb_atoms=nb_atoms, v_min=v_min, v_max=v_max)
         
 
-class ContinuousC51Wrapper(C51, Q, Trainable):
+class ContinuousC51Wrapper(BaseC51, Q, Trainable):
     def __init__(self,
             core_net : torch.nn.Module,
             action_space : gym.spaces.Box,
@@ -51,7 +60,7 @@ class ContinuousC51Wrapper(C51, Q, Trainable):
     
     def Q_per_action(self, *args, **kwargs): raise ValueError("Continuous action cannot use Q_per_action.")
 
-class DiscreteC51Wrapper(C51):
+class DiscreteC51Wrapper(BaseC51):
     def __init__(self,
             core_net : torch.nn.Module,
             action_space : gym.spaces.Discrete,
@@ -97,7 +106,7 @@ class C51Loss(torch.nn.modules.loss._Loss):
         input = input.clamp(min=1E-8, max = 1E8)
         return -(target * torch.log(input)).sum(-1)
 
-class C51DQN(C51, DQN, Q, Trainable):
+class C51DQN(BaseC51, DQN, Q, Trainable):
     def __init__(self,
             nb_atoms : int,
             v_min : float,
@@ -106,26 +115,24 @@ class C51DQN(C51, DQN, Q, Trainable):
             gamma : float,
             loss_fn : torch.nn.modules.loss._Loss = C51Loss(),
             policy : Policy = None,
-            manager : VManager = VManager(),
             **kwargs
         ):
         assert isinstance(net, C51), "net must implement C51"
-        # super().__init__(nb_atoms=nb_atoms, v_min=v_min, v_max=v_max, net=net, gamma=gamma, loss_fn = loss_fn, policy=policy, manager=manager)
-        super().__init__(net=net, gamma=gamma, loss_fn = loss_fn, policy=policy, manager=manager, nb_atoms=nb_atoms, v_min=v_min, v_max=v_max, **kwargs)
+        super().__init__(net=net, gamma=gamma, loss_fn = loss_fn, policy=policy, nb_atoms=nb_atoms, v_min=v_min, v_max=v_max, **kwargs)
 
     @distribution_aware
-    def Q(self, state : torch.Tensor, action : torch.Tensor, get_net_kwargs : dict = {}, q_kwargs : dict = {}, **kwargs):
-        return super().Q(state=state, action=action, get_net_kwargs=get_net_kwargs, q_kwargs=q_kwargs, **kwargs)
+    def Q(self, state : torch.Tensor, action : torch.Tensor, **kwargs):
+        return super().Q(state=state, action=action, **kwargs)
 
     @distribution_aware
-    def Q_per_action(self, state : torch.Tensor, get_net_kwargs : dict = {}, q_kwargs : dict = {}, **kwargs):
-        return super().Q_per_action(state=state, get_net_kwargs=get_net_kwargs, q_kwargs=q_kwargs, **kwargs)
+    def Q_per_action(self, state : torch.Tensor, **kwargs):
+        return super().Q_per_action(state=state, **kwargs)
 
     @distribution_aware
-    def V(self, state: torch.Tensor, pick_action_kwargs : dict = {}, q_kwarks : dict = {}) -> torch.Tensor:
+    def V(self, state: torch.Tensor, op = (None, None)) -> torch.Tensor:
         with distribution_mode(False):
-            action = self.policy.pick_action(state = state, **pick_action_kwargs)
-        return self.Q(state=state, action=action, **q_kwarks)
+            action = self.hidden.policy.pick_action(state = state, op = op[0])
+        return self.Q(state=state, action=action, op = op[1])
 
     @distribution_aware
     def compute_td_errors(self, loss_input : Distribution, loss_target : Distribution):
@@ -139,3 +146,34 @@ class C51DQN(C51, DQN, Q, Trainable):
     @distribution_aware
     def compute_loss_target(self, experience : Experience, **kwargs) -> None:
         return super().compute_loss_target(experience = experience, **kwargs)
+
+    
+
+
+
+
+@distribution_aware
+def plot_q_distribution( c51dqn : C51DQN, replay_memory : Memory, n = 1_000, quantile_range = (0.05, 0.95)):
+    if n > len(replay_memory):
+        raise ValueError(f"n (:{n}) must be greater than len(replay_memory) (:{len(replay_memory)}).")
+    sampler = RandomSampler(replay_memory=replay_memory)
+    batch = sampler.sample(batch_size=n)
+    experience = replay_memory[batch]
+
+    Vs = c51dqn.V(state=experience.state, op = (Op.DQN_LOSS_TARGET_PICK_ACTION, Op.DQN_LOSS_TARGET_Q)).to_tensor()
+    # Vs : [n, nb_atoms]
+
+    quantiles = Vs.quantile(torch.as_tensor(quantile_range), dim = 0).cpu().numpy()
+    mean = Vs.mean(dim=0).cpu().numpy()
+    atoms = c51dqn.atom_config.get_atoms().cpu().numpy()
+
+    plt.plot(atoms, mean, color="b")
+    plt.fill_between(
+            x= atoms, 
+            y1= quantiles[0],
+            y2= quantiles[1], 
+            color= "b",
+            alpha= 0.2)
+    plt.show()
+
+

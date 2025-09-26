@@ -8,7 +8,7 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.value_manager import  SoftDoubleVManager, DoubleVManager
+from rl_agents.value_functions.target_manager import  SoftUpdater, DoubleVManager
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
@@ -36,12 +36,12 @@ def main():
     BATCH_SIZE = 128
     TRAIN_EVERY = 3
     LR = 3E-4
-    TAU = 1./0.005
+    TAU = 0.005
     MULTI_STEP = 3
 
     V_MIN, V_MAX = -300, 300
     NB_ATOMS = 51
-    NOISY_STD = 0.1
+    NOISY_STD = 0.2
     
     replay_memory = MultiStepReplayMemory(
         max_length = MEMORY_SIZE,
@@ -58,8 +58,9 @@ def main():
     )
     core_net = NoisyNetTransformer(std_init=NOISY_STD)(core_net)
     q_net = DiscreteC51Wrapper(core_net=core_net, action_space=action_space, v_min=V_MIN, v_max=V_MAX, nb_atoms=NB_ATOMS)
-    q_manager = SoftDoubleVManager(
-        tau= TAU
+    q_manager = DoubleVManager(
+        updater = SoftUpdater(rate= TAU, update_every= TRAIN_EVERY),
+        context_strategy= DoubleVManager.ddqn_context_strategy
     )
     q_function = C51DQN(
         net=q_net,
@@ -113,7 +114,7 @@ def main():
             state = next_state
 
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.nb_step}")
         # print(episode_losses)
 
 if __name__ == "__main__":

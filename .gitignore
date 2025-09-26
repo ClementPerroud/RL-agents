@@ -1,4 +1,6 @@
 copy*
+code_memo.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

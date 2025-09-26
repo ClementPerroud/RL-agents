@@ -8,7 +8,7 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.value_manager import  SoftDoubleVManager
+from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDQNStrategy
 from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler
@@ -35,14 +35,16 @@ def main():
     GAMMA = 0.99
     HIDDEN_DIM = 128
     MULTI_STEP = 3
+    TRAIN_EVERY = 3
 
     replay_memory = MultiStepReplayMemory(
         max_length = MEMORY_SIZE,
         nb_env=NB_ENV,
         gamma=GAMMA,
         multi_step=MULTI_STEP,
-        # sampler= PrioritizedReplaySampler(length=memory_size, duration= 20_000),
-        observation_space= observation_space)
+        observation_space= observation_space,
+        action_space=action_space
+    )
 
     core_net = torch.nn.Sequential(
         torch.nn.LazyLinear(HIDDEN_DIM), torch.nn.ReLU(),
@@ -51,13 +53,14 @@ def main():
     )
     q_net = DiscreteC51Wrapper(core_net=core_net, action_space=action_space, nb_atoms=NB_ATOMS, v_min=V_MIN, v_max=V_MAX)
     q_net = NoisyNetTransformer(std_init=0.1)(q_net)
-    q_manager = SoftDoubleVManager(
-        tau= 50
+    q_net = TargetManagerWrapper(
+        service= q_net,
+        target_strategy=DDQNStrategy(),
+        updater= SoftUpdater(rate= 1/200, update_every=TRAIN_EVERY)
     )
     q_function = C51DQN(
         nb_atoms= NB_ATOMS, v_min=V_MIN, v_max=V_MAX,
         net=q_net,
-        manager=q_manager,
         loss_fn= C51Loss(),
         gamma = GAMMA
         )
@@ -68,7 +71,7 @@ def main():
         nb_env= NB_ENV,
         policy= policy,
         q_function= q_function,
-        train_every= 3,
+        train_every= TRAIN_EVERY,
         replay_memory=replay_memory,
         sampler= RandomSampler(replay_memory=replay_memory),
         optimizer= torch.optim.AdamW(params=q_net.parameters(), lr = 1E-3),
@@ -101,7 +104,7 @@ def main():
             state = next_state
 
         episode_loss = np.array(episode_losses).mean()
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss:0.2e} | Agent Step : {agent.nb_step}")
         # print(episode_losses)
 
         # if episode_rewards >= 500:

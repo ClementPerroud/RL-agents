@@ -45,14 +45,7 @@ class DiscreteStochasticPolicy(DiscretePolicy, StochasticPolicy):
         return torch.distributions.Categorical(probs = action_probs).entropy()
 
 
-from torch.distributions import Normal, TransformedDistribution
-from torch.distributions.transforms import TanhTransform, AffineTransform
-
-_ContinuousActionDistribution = namedtuple("ContinuousActionDistribution", ["dist", "mean", "std"])
-
 class ContinuousStochasticPolicy(ContinuousPolicy, StochasticPolicy):
-    LOG_STD_MIN, LOG_STD_MAX = -2, 5
-    EPS = 1E-6
     def __init__(self, action_space : gym.spaces.Box, core_net, *args, **kwargs):
         super().__init__(core_net = core_net, action_space=action_space, *args, **kwargs)
         self.low = torch.as_tensor(action_space.low, dtype = torch.float32)

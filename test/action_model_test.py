@@ -10,7 +10,7 @@ class AgentTest:
     def __init__(self, nb_env):
         self.nb_env = nb_env
         self.training = True
-        self.step = 0
+        self.nb_step = 0
         self.action_model = DummyPolicy(action=-1)
 
 def test_signeactionmodel_pick_action():

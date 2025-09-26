@@ -1,18 +1,23 @@
 from rl_agents.policies.policy import Policy
 from rl_agents.service import AgentService
 from rl_agents.memory.memory import Memory
+from rl_agents.value_functions.value import Op
 
 from typing import Protocol, runtime_checkable
 from abc import ABC, abstractmethod
 import torch
 import numpy as np
+import time
+import datetime
 
+@runtime_checkable
 class Agent(Protocol):
+    def __init__(self, **kwargs): super().__init__(**kwargs)
     memory: Memory
-    step : int
-    episode : int
+    nb_step : int
+    nb_episode : int
 
-class BaseAgent(Policy, AgentService, ABC):
+class BaseAgent(Agent, Policy, AgentService, ABC):
     def __init__(
         self,
         nb_env: int,
@@ -23,16 +28,31 @@ class BaseAgent(Policy, AgentService, ABC):
         self.nb_env = nb_env
         self.policy = policy
 
-        self.episode = 0
-        self.step = 0
+        self.nb_episode = 0
+        self.nb_step = 0
+        self.start_time = time.time()
 
-    def update(self, agent : 'BaseAgent'):
-        self.step += 1
+    def update(self, agent : 'BaseAgent', **kwargs):
+        self.nb_step += 1
 
     @abstractmethod
     def train_agent(self):
         assert self.training, "Please set the agent in training mode using .train()"
-    
+
+    def step(self, **kwargs):
+        self.__update__(**kwargs)
+        if any([key in kwargs for key in ["done", "truncated", "terminated"]]):
+            done : np.ndarray = kwargs.get("done", False)
+            truncated : np.ndarray = kwargs.get("truncated", False)
+            terminated : np.ndarray = kwargs.get("terminated", False)
+
+            need_reset = done | truncated | terminated
+            if need_reset.any():
+                env_ids = np.nonzero(need_reset)
+                self.__reset__(env_ids = np.nonzero(need_reset))
+                self.nb_episode += len(env_ids)
+            
+
     def pick_action(self, state : np.ndarray):
         state = torch.as_tensor(state, dtype=torch.float32)
 
@@ -40,7 +60,7 @@ class BaseAgent(Policy, AgentService, ABC):
 
         if single_env_condition: state = state.unsqueeze(0)
 
-        pick_action_return = self.policy.pick_action(state=state)
+        pick_action_return = self.policy.pick_action(state=state, op=Op.ACTOR_PICK_ACTION)
         
         if single_env_condition: 
             if isinstance(pick_action_return, torch.Tensor): pick_action_return = pick_action_return.squeeze(0)
@@ -51,5 +71,17 @@ class BaseAgent(Policy, AgentService, ABC):
         elif isinstance(pick_action_return, tuple): pick_action_return = tuple([elem.detach().numpy() for elem in pick_action_return])
         else: raise ValueError("Pick action must be a Tensor or a tuple of Tensor")
 
-        self.__update__(agent=self)
         return pick_action_return
+
+    def __reset__(self, env_ids : np.ndarray):
+        for element in self.modules():
+            if isinstance(element, AgentService):
+                element.reset(agent=self, env_ids=env_ids)
+
+    def __update__(self, **kwargs):
+        for element in self.modules():
+            if isinstance(element, AgentService):
+                element.update(agent=self, **kwargs)
+    
+    def duration(self) -> datetime.timedelta:
+        return datetime.timedelta(seconds=time.time() - self.start_time)

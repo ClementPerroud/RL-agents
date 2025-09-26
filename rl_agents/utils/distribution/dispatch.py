@@ -16,4 +16,5 @@ class dispatch:
                 owner.DISPATCH_MAPPING[op] = self.fn
         def __call__(self, *args, **kwargs):
             return self.fn(*args, **kwargs)
+        
 
