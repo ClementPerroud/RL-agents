@@ -1,5 +1,5 @@
 from rl_agents.memory.codec import MemoryCodec, TensorCodec
-
+from rl_agents.memory.experience import Experience
 from typing import Protocol, NamedTuple, Type, runtime_checkable
 import torch
 import numpy as np
@@ -28,26 +28,6 @@ class Memory[T](Protocol):
 class EditableMemory[T](Memory[T]):
     def add_field(self, field : MemoryField):...
     def remove_field(self, name : str):...
-
-
-@dataclass(kw_only=True, slots=True, frozen=True)
-class Experience:
-    def __getattr__(self, item):
-        # Called only if attribute not found normally
-        raise AttributeError(
-            f"'The exprience {type(self).__name__}' has no attribute '{item}'. Please add it the replay_memory"
-            f"Available attributes: {[field.name for field in fields(self)]}"
-        )
-
-@dataclass(kw_only=True, slots=True, frozen=True)
-class ExperienceSample:
-    indices : torch.Tensor
-    def __getattr__(self, item):
-        # Called only if attribute not found normally
-        raise AttributeError(
-            f"'The replay_memory related to {type(self).__name__}' has no attribute '{item}'. Your replay_memory is probably not meant to be use in this context."
-            f"Available attributes: {[field.name for field in fields(self)]}"
-        )
 
 class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
     def __init__(
@@ -82,15 +62,10 @@ class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
         # Create the dataclasses dynamically
         experience_fields = [(field.name, field.codec.tensor_class) for field in self.fields]
 
-        self.experience_dataclass_generator = make_dataclass(
+        self.experience_class = make_dataclass(
             f"Experience{self.__class__.__name__}", fields=experience_fields,
             bases=(Experience,), kw_only=True, slots=True, frozen=True
         )
-        self.sample_dataclass_generator = make_dataclass(
-            f"ExperienceSample{self.__class__.__name__}", fields=experience_fields,
-            bases=(ExperienceSample,), kw_only=True, slots=True, frozen=True
-        )
-
 
     def add_field(self, field : MemoryField):
         self._set_up_field(field)
@@ -157,7 +132,7 @@ class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
         return indices
 
     @torch.no_grad()
-    def __getitem__(self, loc) -> ExperienceSample:
+    def __getitem__(self, loc) -> Experience:
         index : int | np.ndarray
         name :str
         if isinstance(loc, tuple):
@@ -183,7 +158,7 @@ class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
         for name, value in kwargs.items():
             field = self.fields_by_name[name]
             out[name] = field.codec.encode(value, field=field, device=self.device)
-        return self.experience_dataclass_generator(**out)
+        return self.experience_class(**out)
 
     @torch.no_grad()
     def __get_experience_from_indices__(self, indices):
@@ -192,7 +167,7 @@ class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
         for name, value in values.items():
             field = self.fields_by_name[name]
             out[name] = field.codec.decode(value, field=field)
-        return self.sample_dataclass_generator(
+        return self.experience_class(
                 indices=indices,
                 **out
             )

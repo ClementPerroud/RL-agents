@@ -60,7 +60,7 @@ class PPOTrainer(OnPolicyTrainerMixin):
         )
         # ratio : [batch]
 
-        # Policy Clip
+        # 1 - Policy Clip
         advantage = experience.advantage
         if isinstance(advantage, Distribution): advantage = advantage.expectation()
 
@@ -68,7 +68,7 @@ class PPOTrainer(OnPolicyTrainerMixin):
         p2 = torch.clip(ratio, 1 - self.epsilon, 1 + self.epsilon) * advantage
         policy_loss = torch.minimum(p1, p2).mean()
 
-        # Value Clip
+        # 2 - Value Clip
         experience_return = experience.advantage + experience.value
         value = self.advantage_function.value_function.V(experience.state)
         value_loss_unclipped = self.value_loss(value, experience_return)

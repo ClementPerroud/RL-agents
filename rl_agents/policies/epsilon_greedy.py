@@ -1,6 +1,8 @@
 from rl_agents.agent import BaseAgent
 from rl_agents.service import AgentService
-from rl_agents.policies.policy import Policy
+from rl_agents.policies.policy import Policy, DiscretePolicy
+from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.wrapper import Wrapper
 
 import numpy as np
 import torch
@@ -8,10 +10,10 @@ from abc import ABC, abstractmethod
 from gymnasium.spaces import Space
 import math
 
-class BaseEspilonGreedyPolicy(Policy, AgentService, ABC):
+class BaseEspilonGreedyPolicyWrapper(Wrapper, Policy, AgentService, ABC):
     def __init__(self, policy : Policy, action_space: Space, epsilon = 1.0):
         super().__init__()
-        self.policy = policy
+        self.policy = assert_is_instance(policy, Policy)
         self.action_space = action_space
         self.epsilon = epsilon
 
@@ -29,8 +31,8 @@ class BaseEspilonGreedyPolicy(Policy, AgentService, ABC):
         env_random_action = rands < self.epsilon
         env_model_action = ~env_random_action
         actions = torch.zeros(
-            size=(nb_env,) + self.action_space.shape, device= state.device
-        ).long() # shape (nb_env, action_shape ...)
+            size=(nb_env,) + self.action_space.shape, device= state.device, dtype=torch.long
+        ) # shape (nb_env, action_shape ...)
 
         if env_model_action.any():
             masked_state = state[
@@ -40,7 +42,7 @@ class BaseEspilonGreedyPolicy(Policy, AgentService, ABC):
             actions[env_model_action] = model_actions.long()
 
         if env_random_action.any():
-            nb_random = env_random_action.sum()
+            nb_random = int(env_random_action.sum())
             random_actions = torch.Tensor(
                 [self.action_space.sample() for i in range(nb_random)], device= state.device
             ).long()
@@ -52,7 +54,7 @@ class BaseEspilonGreedyPolicy(Policy, AgentService, ABC):
         self.epsilon = self.epsilon_function(agent=agent)
 
 
-class EspilonGreedyPolicy(BaseEspilonGreedyPolicy):
+class EspilonGreedyPolicyWrapper(BaseEspilonGreedyPolicyWrapper):
     def __init__(self, policy : Policy, epsilon_decay: int, action_space: Space, end_epsilon: float, start_epsilon : float = 1):
         super().__init__(policy= policy, action_space=action_space, epsilon= start_epsilon)
         self.epsilon_decay = epsilon_decay

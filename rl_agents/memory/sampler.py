@@ -1,5 +1,3 @@
-from rl_agents.value_functions.value import Trainable
-from rl_agents.value_agents.value_agent import AbstractValueAgent
 from rl_agents.service import AgentService
 from rl_agents.utils.sumtree import SumTree
 
@@ -15,6 +13,7 @@ from rl_agents.memory.memory import Memory, Experience
 
 if TYPE_CHECKING:
     from rl_agents.agent import BaseAgent
+    from rl_agents.actor_critic_agent import ActorCriticAgent
 
 
 @runtime_checkable
@@ -60,11 +59,9 @@ class LastSampler(AgentService, Sampler):
 
 
 class PrioritizedReplaySampler(AgentService, UpdatableSampler, WeightableSampler, Sampler):
-    def __init__(self, replay_memory: "BaseExperienceMemory", service : Trainable, alpha=0.65, beta_0=0.5, duration=150_000):
-        assert isinstance(service, Trainable), "Provided service must implement Trainable."
+    def __init__(self, replay_memory: "BaseExperienceMemory", alpha=0.65, beta_0=0.5, duration=150_000):
         super().__init__()
         self.replay_memory = replay_memory
-        self.service = service
         self.alpha = alpha
         self.beta_0 = beta_0
         self.duration = duration
@@ -72,6 +69,9 @@ class PrioritizedReplaySampler(AgentService, UpdatableSampler, WeightableSampler
         self.random_sampler = RandomSampler(replay_memory=self.replay_memory)
         self.nb_step = 0
     
+    def update(self, agent : "BaseAgent", **kwargs):
+        self.nb_step = agent.nb_step
+
     @torch.no_grad()
     def sample(self, batch_size : int):
         if self.nb_step>=self.duration: return self.random_sampler.sample(batch_size=batch_size)
@@ -84,27 +84,15 @@ class PrioritizedReplaySampler(AgentService, UpdatableSampler, WeightableSampler
     def apply_weights(self, loss : torch.Tensor, indices : torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             beta = min(1, self.beta_0 + (1 - self.beta_0) * self.nb_step / self.duration)
-            weights : np.ndarray= (len(self.replay_memory) * self.priorities[indices] / (self.priorities.sum() + 1E-8)) ** (-beta)
+            weights : torch.Tensor= (len(self.replay_memory) * self.priorities[indices] / (self.priorities.sum() + 1E-8)) ** (-beta)
             weights = weights / (weights.max() + 1E-6)
         return loss * weights
 
 
     # Protocol : UpdatableSampler
     @torch.no_grad()
-    def update_experiences(self, indices : torch.Tensor, td_errors : torch.Tensor = None, **kwargs):
-        td_errors = td_errors.abs()
-        self.priorities[indices] = (td_errors + 1e-6) ** self.alpha
+    def update_experiences(self, indices : torch.Tensor, weights : torch.Tensor = None, **kwargs):
+        self.priorities[indices] = (weights + 1e-6) ** self.alpha
 
-    @torch.no_grad()
-    def update(self, agent : AgentService, **kwargs):
-        experience = self.replay_memory.experience_dataclass_generator(
-            **{name : torch.as_tensor(value, dtype = self.replay_memory.fields_by_name[name].dtype) for name, value in kwargs.items()}
-        )
 
-        loss_input = self.service.compute_loss_input(experience=experience)
-        loss_target = self.service.compute_loss_target(experience=experience)
-        td_errors = self.service.compute_td_errors(loss_input=loss_input, loss_target=loss_target).abs().cpu().numpy()
 
-        new_priorities = (td_errors + 1e-6) ** self.alpha 
-        self.priorities.add(new_priorities)
-        self.nb_step += new_priorities.size # = nb of experience stored

@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 from rl_agents.service import AgentService
 from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, Sampler
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer

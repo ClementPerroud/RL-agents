@@ -8,14 +8,14 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
+from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy, DDQNStrategy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, Sampler
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
-from rl_agents.value_functions.dqn_function import DQN, ContinuousQWrapper
-from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, ContinuousC51Wrapper, DiscreteC51Wrapper, plot_q_distribution
+from rl_agents.value_functions.dqn_function import ContinuousQWrapper
+from rl_agents.value_functions.c51_dqn_function import C51Loss, ContinuousC51Wrapper, DiscreteC51Wrapper, plot_q_distribution
 from rl_agents.policies.continuous_noise import GaussianNoiseWrapper, OUNoiseWrapper
 from rl_agents.policies.deterministic_policy import ContinuousDeterministicPolicy
 # from rl_agents.policy_agents.ddpg import DQNTrainer, ActorCriticAgent, DQNLoss
@@ -56,48 +56,45 @@ def main():
         torch.nn.LazyLinear(HIDDEN_DIM), torch.nn.ReLU(),
         torch.nn.LazyLinear(HIDDEN_DIM), torch.nn.ReLU()
     )
-    q_net = DiscreteC51Wrapper(
+    main_q_fn = DiscreteC51Wrapper(
         core_net=q_core_net, action_space=action_space,
         nb_atoms=NB_ATOMS, v_min=V_MIN, v_max=V_MAX)
 
-    updater = SoftUpdater(rate= 5E-3, update_every=TRAIN_EVERY)
-    q_net = TargetManagerWrapper(
-        service=q_net,
-        target_strategy=DDPGStrategy(),
-        updater=updater
+    
+    # q_fn = main_q_fn
+    q_fn = TargetManagerWrapper(
+        service=main_q_fn,
+        target_strategy=DDQNStrategy(),
+        updater=SoftUpdater(rate= 5E-3, update_every=TRAIN_EVERY)
     )
 
-    q_function = DQN(
-        nb_atoms=NB_ATOMS, v_min=V_MIN, v_max=V_MAX,
-        net=q_net,
-        loss_fn= C51Loss(reduction="none"),
-        gamma = GAMMA
-    )
-
-    policy = EspilonGreedyPolicy(
-        policy= DiscreteBestQValuePolicy(q = q_function),
+    policy = EspilonGreedyPolicyWrapper(
+        policy=DiscreteBestQValuePolicy(q_fn = q_fn),
         action_space=action_space,
-        epsilon_decay = 5000,
+        epsilon_decay=5000,
         start_epsilon=0.9,
         end_epsilon=0.03
     )
 
     agent = ActorCriticAgent(
-        nb_env= NB_ENV,
-        actor= policy,
-        critic= q_function,
-        memory= replay_memory,
-        trainer= DQNTrainer(
-            train_every=TRAIN_EVERY,
-            batch_size=256,
-            loss_fn=C51Loss(),
-            optimizer=torch.optim.Adam(params=q_function.parameters(), lr = 2.5E-4),
-            sampler = RandomSampler(replay_memory=replay_memory)
+        nb_env = NB_ENV,
+        actor = policy,
+        critic = q_fn,
+        memory = replay_memory,
+        trainer = DQNTrainer(
+            loss_fn = C51Loss(),
+            optimizer = torch.optim.Adam(params=q_fn.parameters(), lr = 2.5E-4),
+            sampler = PrioritizedReplaySampler(replay_memory=replay_memory, alpha=0.65, beta_0=0.5, duration=30_000),
+            train_every = TRAIN_EVERY,
+            batch_size = 256,
+            gamma = GAMMA,
+            q_policy = DiscreteBestQValuePolicy(q_fn = q_fn)
         ),
         observation_space=observation_space,
         action_space=action_space
     )
 
+    agent.train()
     episodes = 10000
     for i in range(episodes):
         episode_rewards = 0
@@ -128,7 +125,12 @@ def main():
         print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step}")
         
         # if len(replay_memory) > 1_000 and agent.nb_episode % 30 == 0:
-        #     plot_q_distribution(c51dqn=q_function, replay_memory=replay_memory, n=1_000)
+        #     plot_q_distribution(
+        #         c51dqn=q_fn,
+        #         policy = DiscreteBestQValuePolicy(q = main_q_fn),
+        #         replay_memory=replay_memory,
+        #         n=1_000
+        #     )
 
 
 if __name__ == "__main__":

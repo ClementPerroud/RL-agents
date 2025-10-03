@@ -1,4 +1,4 @@
-from rl_agents.policies.policy import AbstractPolicy
+from rl_agents.policies.policy import Policy
 from rl_agents.agent import BaseAgent
 import numpy as np
 import torch
@@ -6,7 +6,7 @@ import torch
 
 # Use for testing purpose
 class DummyPolicy(
-    AbstractPolicy,
+    Policy,
 ):
     def __init__(self, action):
         super().__init__()

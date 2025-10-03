@@ -9,12 +9,12 @@ if __name__ == "__main__":
 
 from rl_agents.service import AgentService
 from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, Sampler
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
-from rl_agents.value_functions.dqn_function import DQN, ContinuousQWrapper
-from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, ContinuousC51Wrapper, plot_q_distribution
+from rl_agents.value_functions.dqn_function import ContinuousQWrapper
+from rl_agents.value_functions.c51_dqn_function import C51Loss, ContinuousC51Wrapper, plot_q_distribution
 from rl_agents.policies.continuous_noise import GaussianNoiseWrapper, OUNoiseWrapper
 from rl_agents.policies.deterministic_policy import ContinuousDeterministicPolicy
 from rl_agents.trainers.ddpg import DDPGTrainer
@@ -82,18 +82,6 @@ def main():
     )
     policy = ContinuousDeterministicPolicy(action_space=action_space, core_net=policy_core_net)
 
-    q_function = C51DQN(
-        nb_atoms=NB_ATOMS, v_min=V_MIN, v_max=V_MAX,
-        net=q_net,
-        loss_fn= C51Loss(reduction="none"),
-        policy=TargetManagerWrapper(
-            service=policy,
-            target_strategy=DDPGStrategy(),
-            updater=updater
-        ),
-        gamma = GAMMA
-    )
-
     policy = OUNoiseWrapper(policy=policy, nb_env=NB_ENV, action_space=action_space)
     policy = TargetManagerWrapper(
         service=policy,
@@ -104,21 +92,24 @@ def main():
     agent = ActorCriticAgent(
         nb_env= NB_ENV,
         actor= policy,
-        critic= q_function,
+        critic= q_net,
         memory= replay_memory,
         trainer= DDPGTrainer(
             train_every=TRAIN_EVERY,
             batch_size=256,
             q_loss_fn=C51Loss(),
-            q_optimizer=torch.optim.Adam(params=q_function.parameters(), lr = 1E-3),
+            q_optimizer=torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
             policy_optimizer=torch.optim.Adam(params=policy.parameters(), lr = 1E-4),
             # sampler = RandomSampler(replay_memory=replay_memory)
-            sampler = PrioritizedReplaySampler(replay_memory=replay_memory, service=q_function, alpha=0.65, beta_0=0.5, duration=30_000)#RandomSampler(replay_memory=replay_memory)
+            sampler = PrioritizedReplaySampler(replay_memory=replay_memory, alpha=0.65, beta_0=0.5, duration=30_000),
+            gamma=GAMMA,
+            q_policy=policy
         ),
         observation_space=observation_space,
         action_space=action_space
     )
 
+    agent.train()
     episodes = 500
     for i in range(episodes):
         episode_rewards = 0

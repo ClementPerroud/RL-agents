@@ -32,25 +32,23 @@ class BaseAgent(Agent, Policy, AgentService, ABC):
         self.nb_step = 0
         self.start_time = time.time()
 
-    def update(self, agent : 'BaseAgent', **kwargs):
-        self.nb_step += 1
-
     @abstractmethod
     def train_agent(self):
         assert self.training, "Please set the agent in training mode using .train()"
 
     def step(self, **kwargs):
+        self.nb_step += 1
         self.__update__(**kwargs)
         if any([key in kwargs for key in ["done", "truncated", "terminated"]]):
-            done : np.ndarray = kwargs.get("done", False)
-            truncated : np.ndarray = kwargs.get("truncated", False)
-            terminated : np.ndarray = kwargs.get("terminated", False)
+            done : np.ndarray = torch.as_tensor(kwargs.get("done", False))
+            truncated : np.ndarray = torch.as_tensor(kwargs.get("truncated", False))
+            terminated : np.ndarray = torch.as_tensor(kwargs.get("terminated", False))
 
             need_reset = done | truncated | terminated
             if need_reset.any():
                 env_ids = np.nonzero(need_reset)
                 self.__reset__(env_ids = np.nonzero(need_reset))
-                self.nb_episode += len(env_ids)
+                self.nb_episode += int(env_ids.numel())
             
 
     def pick_action(self, state : np.ndarray):

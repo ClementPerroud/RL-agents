@@ -1,5 +1,5 @@
-from rl_agents.policies.single_policy import DummyPolicy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
+from rl_agents.policies.dummy_policy import DummyPolicy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
 
 import numpy as np
 import torch
@@ -28,7 +28,7 @@ def test_epsilon_greedy_all_model():
     state = np.random.rand(4, 2)
     agent = AgentTest(nb_env=4)
     base_policy = DummyPolicy(action=-1)
-    strategy = EspilonGreedyPolicy(
+    strategy = EspilonGreedyPolicyWrapper(
         policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     strategy.epsilon = 0.0
@@ -43,7 +43,7 @@ def test_epsilon_greedy_all_random():
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
     base_policy = DummyPolicy(action=-1)
-    proxy = EspilonGreedyPolicy(
+    proxy = EspilonGreedyPolicyWrapper(
         policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 1.0
@@ -60,7 +60,7 @@ def test_epsilon_greedy_statistical_test_1():
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
     base_policy = DummyPolicy(action=-1)
-    proxy = EspilonGreedyPolicy(
+    proxy = EspilonGreedyPolicyWrapper(
         policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 0.8
@@ -77,7 +77,7 @@ def test_epsilon_greedy_statistical_test_2():
     agent = AgentTest(nb_env=nb_env)
     state = np.random.rand(nb_env, 2)
     base_policy = DummyPolicy(action=-1)
-    proxy = EspilonGreedyPolicy(
+    proxy = EspilonGreedyPolicyWrapper(
         policy=base_policy, q=0.99, start_epsilon=1, end_epsilon=0.01, action_space=action_space
     )
     proxy.epsilon = 0.3

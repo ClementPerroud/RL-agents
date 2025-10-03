@@ -1,7 +1,7 @@
 from rl_agents.service import AgentService
 from rl_agents.policies.policy import Policy
 from rl_agents.value_functions.value import Op
-from rl_agents.memory.memory import ExperienceSample
+from rl_agents.memory.experience import ExperienceLike
 from rl_agents.memory.sampler import Sampler
 from rl_agents.actor_critic_agent import ActorCriticAgent
 from rl_agents.trainers.dqn import DQNTrainer
@@ -38,7 +38,7 @@ class SACTrainer(OffPolicyTrainerMixin, QCriticTrainerMixin):
         self.critic : AgentService = agent.critic
 
     @distribution_aware
-    def train_step(self, experience : ExperienceSample):
+    def train_step(self, experience : ExperienceLike):
 
         # Critic Loss
         self.actor.requires_grad_(False)

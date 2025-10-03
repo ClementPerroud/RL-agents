@@ -2,7 +2,7 @@ from rl_agents.service import AgentService
 from rl_agents.policies.policy import Policy
 from rl_agents.policies.deterministic_policy import ContinuousDeterministicPolicy
 from rl_agents.value_functions.value import Op
-from rl_agents.memory.memory import ExperienceSample
+from rl_agents.memory.experience import ExperienceLike
 from rl_agents.memory.sampler import Sampler
 from rl_agents.actor_critic_agent import ActorCriticAgent
 from rl_agents.trainers.dqn import DQNTrainer
@@ -25,11 +25,22 @@ class DDPGTrainer(OffPolicyTrainerMixin, QCriticTrainerMixin):
             sampler : Sampler,
             train_every : int,
             batch_size : int,
+            gamma : float,
+            q_policy : Policy,
             *args, **kwargs):
         super().__init__(sampler=sampler, train_every=train_every, batch_size=batch_size)
-        self.dqn_trainer = DQNTrainer(loss_fn=q_loss_fn, optimizer=q_optimizer, sampler=sampler, train_every=train_every, batch_size=batch_size)
         self.q_optimizer = q_optimizer
         self.policy_optimizer = policy_optimizer
+
+        self.dqn_trainer = DQNTrainer(
+            loss_fn=q_loss_fn,
+            optimizer=q_optimizer,
+            sampler=sampler,
+            train_every=train_every,
+            batch_size=batch_size,
+            gamma = gamma,
+            q_policy= q_policy,
+        )
 
 
     def set_up_and_check(self, agent : "ActorCriticAgent"):
@@ -41,7 +52,7 @@ class DDPGTrainer(OffPolicyTrainerMixin, QCriticTrainerMixin):
         self.critic : AgentService = agent.critic
 
     @distribution_aware
-    def train_step(self, experience : ExperienceSample):
+    def train_step(self, experience : ExperienceLike):
 
         # Critic Loss
         self.actor.requires_grad_(False)
@@ -73,3 +84,6 @@ class DDPGTrainer(OffPolicyTrainerMixin, QCriticTrainerMixin):
         self.q_function.requires_grad_(True)
 
         return critic_loss, actor_loss.item()
+
+    def sample_pre_hook(self):
+        return self.dqn_trainer.sample_pre_hook()

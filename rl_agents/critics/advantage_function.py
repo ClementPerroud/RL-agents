@@ -1,7 +1,6 @@
-from rl_agents.value_functions.dqn_function import DVN
-from rl_agents.agent import BaseAgent
+from rl_agents.value_functions.value import V
 from rl_agents.service import AgentService
-from rl_agents.memory.memory import ExperienceSample
+from rl_agents.memory.experience import ExperienceLike
 from rl_agents.memory.memory import MemoryField
 from rl_agents.memory.codec import AutomaticCodecFactory
 from rl_agents.utils.collates import do_nothing_collate
@@ -34,15 +33,16 @@ class ReverseDatasetProxy(torch.utils.data.Dataset):
     def __getitems__(self, loc): return self.dataset[self.__len__() - torch.as_tensor(loc).long() - 1]
 
 class GAEFunction(BaseAdvantageFunction):
-    def __init__(self, value_function : DVN, lamb : float, normalize_advantage : bool):
+    def __init__(self, value_function : V, gamma : float, lamb : float, normalize_advantage : bool):
         super().__init__()
         self.value_function = value_function
-        self.lamb = lamb
+        self.gamma = float(gamma)
+        self.lamb = float(lamb)
         self.normalize_advantage = normalize_advantage
 
     @torch.no_grad()
     @distribution_aware
-    def _gae(self, experience : ExperienceSample, advantage_tp1 : torch.Tensor = None) -> torch.Tensor:
+    def _gae(self, experience : ExperienceLike, advantage_tp1 : torch.Tensor = None) -> torch.Tensor:
         # state: torch.Tensor,  # [B, state_shape ...] obtained at t
         # action: torch.Tensor,  # [B] obtained at t+multi_steps
         # reward: torch.Tensor,  # [B] obtained between t+1 and t+multi_step (then summed up using discounted sum)
@@ -56,13 +56,13 @@ class GAEFunction(BaseAdvantageFunction):
         
         with distribution_mode(False):
             delta = (
-                experience.reward + (1 - end.float()) * self.value_function.gamma * self.value_function.V(experience.next_state)
+                experience.reward + (1 - end.float()) * self.gamma * self.value_function.V(experience.next_state)
                 - value_t
             )
 
         advantage_t = delta
 
-        if advantage_tp1 is not None: advantage_t = advantage_t+ self.value_function.gamma * self.lamb * (1 - end.float()) * advantage_tp1
+        if advantage_tp1 is not None: advantage_t = advantage_t+ self.gamma * self.lamb * (1 - end.float()) * advantage_tp1
 
         return advantage_t, value_t
     
@@ -74,7 +74,7 @@ class GAEFunction(BaseAdvantageFunction):
         
         if "advantage" not in trainer.rollout_memory.names:
             # Compute shapes :
-            one_experience : ExperienceSample = reserved_dataset[[0]]
+            one_experience : ExperienceLike = reserved_dataset[[0]]
             one_advantage, one_value = self._gae(experience=one_experience)
             codec_factory = AutomaticCodecFactory()
             trainer.rollout_memory.add_field(MemoryField("advantage", shape=one_advantage.shape[1:], dtype=torch.float32, default=0, codec=codec_factory.generate_codec_from_item(one_advantage)))
@@ -87,7 +87,7 @@ class GAEFunction(BaseAdvantageFunction):
         advantage = None
         for i in range(batches.size(0)):
             indices = batches[i,:]
-            experience : ExperienceSample = reserved_dataset[indices]
+            experience : ExperienceLike = reserved_dataset[indices]
 
             advantage, value = self._gae(experience=experience, advantage_tp1 = advantage)
             trainer.rollout_memory["advantage", experience.indices] = advantage

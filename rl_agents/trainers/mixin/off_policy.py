@@ -1,11 +1,13 @@
 from rl_agents.trainers.agent import BaseAgentTrainer
-from rl_agents.memory.sampler import Sampler, RandomSampler
+from rl_agents.memory.sampler import Sampler, RandomSampler, UpdatableSampler
 from rl_agents.memory.memory import Memory
 from rl_agents.memory.replay_memory import ReplayMemory
+from rl_agents.memory.experience import ExperienceLike
 from rl_agents.utils.hidden_modules import HiddenModulesUtilsMixin
 from rl_agents.utils.assert_check import assert_is_instance
 
 from abc import ABCMeta, abstractmethod
+import torch
 
 class OffPolicyTrainerMixin(
         HiddenModulesUtilsMixin,
@@ -33,10 +35,13 @@ class OffPolicyTrainerMixin(
     def train_agent(self) -> float:
         # advantage : [batch]
         if self.agent.nb_step % self.train_every == 0 and len(self.agent.memory) > self.batch_size:
-            batch = self.sampler.sample(self.batch_size)
-            experience = self.replay_memory[batch]
-            return self.train_step(experience)
+                self.sample_pre_hook()
+                batch = self.sampler.sample(self.batch_size)
+                experience = self.replay_memory[batch]
+                return self.train_step(experience)
         return None
     
     @abstractmethod
     def train_step(self): ...
+
+    def sample_pre_hook(self): ...

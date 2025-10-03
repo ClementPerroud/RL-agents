@@ -15,7 +15,6 @@ class SumTree:
 
         self.size = int(size)                  # capacity
         self.length = 0                        # how many items have ever been written (clamped to size)
-        self.write = 0                         # next leaf slot in [0, size)
         self.leaf_start = self.size - 1        # first leaf index in flat tree
 
         # One contiguous tensor for the entire tree (internal + leaves)
@@ -49,24 +48,6 @@ class SumTree:
             idx = (idx - 1) // 2
             self.tree[idx] += change
 
-    # ------------------------------ API ------------------------------------
-
-    @torch.no_grad()
-    def add(self, value: float | Iterable[float]) -> None:
-        """
-        Insert a priority (or batch). Overwrites in FIFO when full.
-        """
-        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
-            for v in value:
-                self.add(float(v))
-            return
-
-        pos = self.write
-        self._update_leaf(pos, float(value))
-
-        # Move circular pointer & adjust logical length
-        self.write = (self.write + 1) % self.size
-        self.length = min(self.length + 1, self.size)
 
     @torch.no_grad()
     def __setitem__(self, idx, value) -> None:
@@ -87,8 +68,7 @@ class SumTree:
 
         # Scalar case
         i = int(idx)
-        if i < 0 or i >= self.length:
-            raise IndexError(f"Cannot set value at index {i} (current length = {self.length})")
+        self.length =  min(self.size, max(self.length, i + 1))
         self._update_leaf(i, float(value))
 
     @torch.no_grad()

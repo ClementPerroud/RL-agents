@@ -17,6 +17,8 @@ class ContinuousDeterministicPolicy(ContinuousPolicy):
         # state : [batch, state_shape ...]
         raw_action = self.forward(state=state)
         action = self._squash(raw_action)
+        if action.isnan().any():
+            raise ValueError("Action contains nan.")
         return action
         # shape [batch]
 

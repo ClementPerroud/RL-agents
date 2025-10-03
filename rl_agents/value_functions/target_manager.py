@@ -10,6 +10,7 @@ import torch
 from torch.nn.modules.lazy import LazyModuleMixin
 from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 from functools import wraps
+import inspect
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable, Literal, Union, Any
 if TYPE_CHECKING:
@@ -80,22 +81,39 @@ class TargetManagerWrapper(Wrapper, AgentService):
             case "min" | "mean":    return self.target_services
             case _:                 raise KeyError(op_strategy.reduce_targets)
     
+    @distribution_aware
     def _reduce(self, op_strategy : OpStrategy, returns : torch.Tensor):
         match op_strategy.reduce_targets:
             case "first" | "none":  return returns[0]
             case "min":             return returns.min(0)
             case "mean":            return returns.mean(0)
-
+    
     @distribution_aware
-    def _wrap_method(self, method_name, op : Op, *args, **kwargs):
+    def _aggregate_returns(self, op_strategy : OpStrategy, returns : list[Any]):
+        if len(returns) == 0: return returns
+        if len(returns) == 1: return returns[0]
+        
+        _first_elem = returns[0]
+        if isinstance(_first_elem, torch.Tensor):
+            return self._reduce(
+                op_strategy=op_strategy, 
+                returns=torch.stack(returns)
+                )
+        if isinstance(_first_elem, tuple) or isinstance(_first_elem, list):
+            return _first_elem.__class__([
+                self._aggregate_returns(returns= [_return[i] for _return in returns])
+                    for i in range(len(_first_elem))
+            ])
+        raise NotImplementedError(f"Type of return {returns.__class__.__name__} is not supported with TargetManagerWrapper")
+
+    def _wrap_method(self, method_name, *args, op : Op = None, **kwargs):
         op_strategy = self.target_strategy.plan(op)
         nets = self._select_nets(op_strategy=op_strategy)
         returns = [
             getattr(net, method_name)(*args, op = op, **kwargs) 
             for net in nets
         ]
-        returns = torch.stack(returns)
-        return self._reduce(op_strategy=op_strategy, returns = returns)
+        return self._aggregate_returns(op_strategy=op_strategy, returns = returns)
 
     def _wrap_attribute(self, attribute_name):
         service = self.service
@@ -132,26 +150,21 @@ class TargetManagerWrapper(Wrapper, AgentService):
 
         return True
     
-    # Q implementation
-    def V(self, state: torch.Tensor, op : Op, **kwargs) -> torch.Tensor: return self._wrap_method("V", state=state, op=op, **kwargs)
-    def Q(self, state: torch.Tensor, action : torch.Tensor, op : Op, **kwargs) -> torch.Tensor: return self._wrap_method("Q", state=state, action=action, op=op, **kwargs)
-    def Q_per_action(self, state: torch.Tensor, op : Op, **kwargs) -> torch.Tensor: return self._wrap_method("Q_per_action", state=state, op=op, **kwargs)
-    
-    # Policy implementation
-    def pick_action(self, state: torch.Tensor, op : Op, **kwargs) -> torch.Tensor: return self._wrap_method("pick_action", state=state, op=op, **kwargs)
+    def __getattr__(self, name):
+        # Redirect calls to the targeted services.
+        wrapped_service = super().__getattr__("service")
+        wrapped_attr = getattr(wrapped_service, name, None)
 
-    # Q51 implementation
-    @property
-    def nb_atoms(self): return self._wrap_attribute("nb_atoms")
-
-    @property
-    def v_min(self): return self._wrap_attribute("v_min")
-
-    @property
-    def v_max(self): return self._wrap_attribute("v_max")
-
-    @property
-    def atom_config(self): return self._wrap_attribute("atom_config")
+        # If the attribute is a class method 
+        if inspect.ismethod(wrapped_attr):
+            @wraps(wrapped_attr)
+            def wrapper(*args, **kwargs):
+                op = kwargs.pop("op", None)
+                return self._wrap_method(name, *args, op=op, **kwargs)
+            return wrapper
+        elif wrapped_attr is not None:
+            return wrapped_attr
+        return super().__getattr__(name)
 
 class HardUpdater(AgentService):
     def __init__(self, rate : float):

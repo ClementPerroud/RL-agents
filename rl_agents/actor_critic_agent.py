@@ -37,10 +37,13 @@ class ActorCriticAgent(BaseAgent):
  
 
     def store(self, **kwargs):
-        if self.training:
-            for key, value in kwargs.items():
-                kwargs[key] = torch.as_tensor(value)
-                if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
-            # Adding log_prob
-            self.memory.store(**kwargs)
+        if not self.training: raise ValueError("Please set the agent to train mode using agent.train()")
+        # Store experience
+        for key, value in kwargs.items():
+            kwargs[key] = torch.as_tensor(value)
+            if kwargs[key].isnan().any(): raise ValueError(f"Detected nan in {key} : {kwargs[key]}")
+            if self.nb_env == 1: kwargs[key] = kwargs[key][None, ...] # Uniformize the shape, so first dim is always nb_env 
+        # Adding log_prob
+        self.memory.store(**kwargs)
+        # Step over sub modules
         self.step(**kwargs)

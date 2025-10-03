@@ -2,15 +2,16 @@ from rl_agents.utils.wrapper import Wrapper
 
 def assert_is_instance(value, expected, name: str | None = None, skip_wrappers = True):
     """Assert isinstance(value, expected) with a clear, auto-qualified error."""
-
-    # Skip wrapper classes to retrieve initial module
+    
+    initial_value = value
+    # Skip wrapper classes to retrieve initial module class
     if skip_wrappers:
         while isinstance(value, Wrapper):
             value = value.wrapped
     
     # Case 1 : Value respect the expected class -> return the value
     if isinstance(value, expected):
-        return value  # allow: x = assert_is_instance(x, T)
+        return initial_value  # allow: x = assert_is_instance(x, T)
 
     # Case 2 : value does not respect the expected class -> raised error message
     exp  = _qual(expected)

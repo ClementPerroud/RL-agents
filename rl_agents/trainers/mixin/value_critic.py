@@ -39,7 +39,6 @@ class QCriticTrainerMixin(
         super().set_up_and_check(agent)
         # CRITIC CHECK : Check if the critic is a trainable Q function.
         assert_is_instance(self.agent, ActorCriticAgent)
-        assert_is_instance(self.agent.critic, V)
         assert_is_instance(self.agent.critic, Q)
         self.hidden.q_function = self.agent.critic
         

@@ -8,7 +8,7 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.policies.stochastic_policy import DiscreteStochasticPolicy
-from rl_agents.value_functions.dvn_function import DVN, VWrapper
+from rl_agents.value_functions.dvn_function import VWrapper
 from rl_agents.critics.advantage_function import GAEFunction
 
 from rl_agents.actor_critic_agent import ActorCriticAgent
@@ -51,7 +51,7 @@ def main():
 
     CLIP_VALUE_LOSS = True
     NORMALIZE_ADV = True
-    MAX_GRAD_NORM = 1
+    MAX_GRAD_NORM = None
 
 
     v_core_net = torch.nn.Sequential(
@@ -66,15 +66,12 @@ def main():
 
     v_net = VWrapper(core_net=v_core_net)
 
-    v_function = DVN(
-        net=v_net,
-        gamma=GAMMA,
-    )
+    v_function = v_net
 
     policy = DiscreteStochasticPolicy(core_net= p_core_net, action_space=action_space)
 
     advantage_function = GAEFunction(
-        value_function=v_function, lamb=LAMBDA, normalize_advantage=NORMALIZE_ADV
+        value_function=v_function, gamma = GAMMA, lamb=LAMBDA, normalize_advantage=NORMALIZE_ADV
     )
 
     agent = ActorCriticAgent(

@@ -9,11 +9,11 @@ if __name__ == "__main__":
 
 from rl_agents.service import AgentService
 from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicy
+from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, Sampler
 from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
-from rl_agents.value_functions.dqn_function import DQN, ContinuousQWrapper
+from rl_agents.value_functions.dqn_function import ContinuousQWrapper
 # from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, DiscreteC51Wrapper
 from rl_agents.policies.continuous_noise import GaussianNoiseWrapper 
 from rl_agents.policies.deterministic_policy import ContinuousDeterministicPolicy
@@ -82,25 +82,20 @@ def main():
         updater=updater
     )
 
-    q_function = DQN(
-        net=q_net,
-        loss_fn= torch.nn.MSELoss(reduction="none"),
-        policy=policy,
-        gamma = GAMMA
-    )
-
     agent = ActorCriticAgent(
         nb_env= NB_ENV,
         actor= policy,
-        critic= q_function,
+        critic= q_net,
         memory= replay_memory,
         trainer= DDPGTrainer(
             train_every=TRAIN_EVERY,
             batch_size=256,
             q_loss_fn=torch.nn.MSELoss(reduction="none"),
-            q_optimizer=torch.optim.Adam(params=q_function.parameters(), lr = 1E-3),
+            q_optimizer=torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
             policy_optimizer=torch.optim.Adam(params=policy.parameters(), lr = 1E-4),
-            sampler = RandomSampler(replay_memory=replay_memory)
+            sampler = RandomSampler(replay_memory=replay_memory),
+            gamma= GAMMA,
+            q_policy=policy
         ),
         observation_space=observation_space,
         action_space=action_space
