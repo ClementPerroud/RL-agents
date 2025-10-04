@@ -8,14 +8,14 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy, DDQNStrategy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
+from rl_agents.modules.target_wrapper import SoftUpdater, EnsembleTargetWrapper, DDPGStrategy, DDQNStrategy
+from rl_agents.policies.epsilon_greedy import EpsilonGreedyPolicyWrapper
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, Sampler
-from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
-from rl_agents.value_functions.dqn_function import ContinuousQWrapper
-from rl_agents.value_functions.c51_dqn_function import C51Loss, ContinuousC51Wrapper, DiscreteC51Wrapper, plot_q_distribution
+from rl_agents.modules.noisy_net_strategy import NoisyNetTransformer
+from rl_agents.value_functions.q import ContinuousQWrapper
+from rl_agents.value_functions.c51q import C51Loss, ContinuousC51QWrapper, DiscreteC51Wrapper, plot_q_distribution
 from rl_agents.policies.continuous_noise import GaussianNoiseWrapper, OUNoiseWrapper
 from rl_agents.policies.deterministic_policy import ContinuousDeterministicPolicy
 # from rl_agents.policy_agents.ddpg import DQNTrainer, ActorCriticAgent, DQNLoss
@@ -62,13 +62,13 @@ def main():
 
     
     # q_fn = main_q_fn
-    q_fn = TargetManagerWrapper(
+    q_fn = EnsembleTargetWrapper(
         service=main_q_fn,
         target_strategy=DDQNStrategy(),
         updater=SoftUpdater(rate= 5E-3, update_every=TRAIN_EVERY)
     )
 
-    policy = EspilonGreedyPolicyWrapper(
+    policy = EpsilonGreedyPolicyWrapper(
         policy=DiscreteBestQValuePolicy(q_fn = q_fn),
         action_space=action_space,
         epsilon_decay=5000,

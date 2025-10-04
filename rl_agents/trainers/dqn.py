@@ -6,9 +6,10 @@ from rl_agents.trainers.mixin.value_critic import QCriticTrainerMixin
 from rl_agents.actor_critic_agent import ActorCriticAgent
 from rl_agents.utils.distribution.distribution import Distribution, distribution_aware, distribution_mode
 from rl_agents.value_functions.value import Q, V, Trainable, Op
-from rl_agents.policies.policy import Policy
+from rl_agents.value_functions.c51q import C51, C51Loss
+from rl_agents.policies.policy import Policy, StochasticPolicy
 from rl_agents.policies.value_policy import DiscreteBestQValuePolicy
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance, is_instance
 
 import torch
 
@@ -37,15 +38,19 @@ class DQNTrainer(
         self._last_sampler_update_step = 0
 
     @property
-    def q_policy(self) -> DiscreteBestQValuePolicy: return self.hidden.q_policy
+    def q_policy(self) -> Policy: return self.hidden.q_policy
 
     def set_up_and_check(self, agent : "ActorCriticAgent"):
         super().set_up_and_check(agent)
-        assert_is_instance(self.hidden.q_policy, Policy)
+        assert_is_instance(self.q_policy, Policy)
 
         self.gamma_computation = self.gamma
         if isinstance(self.replay_memory, MultiStepReplayMemory): self.gamma_computation **= self.replay_memory.multi_step
 
+        self.stochastic_policy = is_instance(self.q_policy, StochasticPolicy) 
+
+        # When working with C51, we need to correct loss.
+        if is_instance(self.q_function, C51): assert_is_instance(self.loss_fn, C51Loss)
 
     def sample_pre_hook(self):
         # Compute weights for new experiences (if needed)
@@ -59,10 +64,14 @@ class DQNTrainer(
             self.sampler.update_experiences(indices=last_experiences.indices, weights = td_errors)
             self._last_sampler_update_step = n
 
-    def train_step(self, experience : ExperienceLike):
+    def train_step(self, experience : ExperienceLike, alpha=None):
         # 1 - Train DQN
         self.optimizer.zero_grad(set_to_none=True)
-        q_loss, td_errors = self.compute_loss(experience=experience, return_td_errors=isinstance(self.sampler, UpdatableSampler))
+        q_loss, td_errors = self.compute_loss(
+            experience=experience,
+            return_td_errors=isinstance(self.sampler, UpdatableSampler),
+            alpha=alpha
+        )
         q_loss.backward()
         self.optimizer.step()
 
@@ -73,20 +82,24 @@ class DQNTrainer(
         return q_loss.item()
 
     @distribution_aware
-    def compute_loss(self, experience : ExperienceLike, return_loss = True, return_td_errors = True) -> torch.Tensor:
+    def compute_loss(self, experience : ExperienceLike, return_loss = True, return_td_errors = True, alpha = None) -> torch.Tensor:
         loss_input = self.q_function.Q(experience.state, experience.action, op = Op.DQN_LOSS_INPUT_Q)
 
         with torch.no_grad():
             mask_end = 1 - experience.done.float()
             with distribution_mode(False):
-                best_action = self.q_policy.pick_action(state = experience.next_state, op = Op.DQN_LOSS_TARGET_PICK_ACTION)
+                if self.stochastic_policy:  best_action, log_prob = self.q_policy.pick_action(state = experience.next_state, op = Op.DQN_LOSS_TARGET_PICK_ACTION)
+                else:                       best_action = self.q_policy.pick_action(state = experience.next_state, op = Op.DQN_LOSS_TARGET_PICK_ACTION)
             q_values =self.q_function.Q(state=experience.next_state, action=best_action, op=Op.DQN_LOSS_TARGET_Q)
 
+            if self.stochastic_policy and alpha is not None: 
+                q_values = q_values - alpha * log_prob # Only for SAC
+                
             loss_target = experience.reward + mask_end * self.gamma_computation * q_values
         
         loss = None
         if return_loss:
-            loss : torch.Tensor = self.loss_fn(loss_input, loss_target)
+            loss : torch.Tensor = self.loss_fn(loss_input, loss_target.expand_as(loss_input))
             
             if loss.isnan().any(): raise ValueError("Nan Loss")
             
@@ -100,9 +113,16 @@ class DQNTrainer(
         td_errors = None
         if return_td_errors:
             with torch.no_grad():
+                
                 loss_input_td, loss_target_td = loss_input, loss_target
+
+                # When using C51
                 if isinstance(loss_input_td, Distribution): loss_input_td = loss_input_td.expectation()
                 if isinstance(loss_target_td, Distribution): loss_target_td = loss_target_td.expectation()
+
+                # When using SAC, loss_input_td is shape [2, B] while loss_target_td is shape [B]
+                if loss_input_td.ndim > loss_target_td.ndim: loss_input_td = loss_input_td.mean(dim=0)
+
                 td_errors = (loss_input_td - loss_target_td).abs()
         
         return loss, td_errors

@@ -8,12 +8,12 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.service import AgentService
-from rl_agents.value_functions.target_manager import SoftUpdater, TargetManagerWrapper, DDPGStrategy
-from rl_agents.policies.epsilon_greedy import EspilonGreedyPolicyWrapper
+from rl_agents.modules.target_wrapper import SoftUpdater, EnsembleTargetWrapper, DDPGStrategy
+from rl_agents.policies.epsilon_greedy import EpsilonGreedyPolicyWrapper
 from rl_agents.memory.replay_memory import ReplayMemory, MultiStepReplayMemory
 from rl_agents.memory.sampler import PrioritizedReplaySampler, RandomSampler, Sampler
-from rl_agents.value_agents.noisy_net_strategy import NoisyNetTransformer
-from rl_agents.value_functions.dqn_function import DQN, ContinuousQWrapper
+from rl_agents.modules.noisy_net_strategy import NoisyNetTransformer
+from rl_agents.value_functions.q import ContinuousQWrapper
 # from rl_agents.value_functions.c51_dqn_function import C51DQN, C51Loss, DiscreteC51Wrapper
 from rl_agents.policies.continuous_noise import GaussianNoiseWrapper, OUNoiseWrapper
 from rl_agents.policies.deterministic_policy import ContinuousDeterministicPolicy
@@ -66,7 +66,7 @@ def main():
     q_net = ContinuousQWrapper(core_net=q_core_net, action_space=action_space)
 
     updater = SoftUpdater(rate= 5E-3, update_every=TRAIN_EVERY)
-    q_net = TargetManagerWrapper(
+    q_net = EnsembleTargetWrapper(
         service=q_net,
         target_strategy=DDPGStrategy(),
         updater=updater
@@ -82,7 +82,7 @@ def main():
     q_function = DQN(
         net=q_net,
         loss_fn= torch.nn.MSELoss(reduction="none"),
-        policy=TargetManagerWrapper(
+        policy=EnsembleTargetWrapper(
             service=policy,
             target_strategy=DDPGStrategy(),
             updater=updater
@@ -91,7 +91,7 @@ def main():
     )
 
     policy = OUNoiseWrapper(policy=policy, nb_env=NB_ENV, action_space=action_space)
-    policy = TargetManagerWrapper(
+    policy = EnsembleTargetWrapper(
         service=policy,
         target_strategy=DDPGStrategy(),
         updater=updater

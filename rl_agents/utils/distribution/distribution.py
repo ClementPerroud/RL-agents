@@ -187,7 +187,7 @@ class Distribution(torch.Tensor):
     @dispatch(torch.ops.aten.div, torch.ops.aten.div_)
     @staticmethod
     def _truediv(input : Any, other : Any, **kwargs):
-        return Distribution._mul(input=input, other=other**(-1))
+        return Distribution._mul(input=input, other=1/other)
 
     @dispatch(torch.ops.aten.mul, torch.ops.aten.mul_)
     @staticmethod

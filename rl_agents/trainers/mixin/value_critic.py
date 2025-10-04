@@ -5,7 +5,7 @@ from rl_agents.memory.sampler import Sampler
 from rl_agents.value_functions.value import V, Q, Trainable
 from rl_agents.actor_critic_agent import ActorCriticAgent
 from rl_agents.utils.hidden_modules import HiddenModulesUtilsMixin
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 
 from typing import Union
 

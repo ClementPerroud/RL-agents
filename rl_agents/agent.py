@@ -46,8 +46,8 @@ class BaseAgent(Agent, Policy, AgentService, ABC):
 
             need_reset = done | truncated | terminated
             if need_reset.any():
-                env_ids = np.nonzero(need_reset)
-                self.__reset__(env_ids = np.nonzero(need_reset))
+                env_ids = torch.nonzero(need_reset, as_tuple=False).squeeze(-1)
+                self.__reset__(env_ids = env_ids)
                 self.nb_episode += int(env_ids.numel())
             
 

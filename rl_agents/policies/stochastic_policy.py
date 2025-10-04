@@ -59,7 +59,7 @@ class ContinuousStochasticPolicy(ContinuousPolicy, StochasticPolicy):
         x = self.core_net(states)
         return self.head_mean(x), self.head_log_std(x)
 
-    def action_distributions(self, state) -> torch.Tensor:
+    def action_distributions(self, state, **kwargs) -> torch.Tensor:
         action_mean, action_log_std = self.forward(state) # type: ignore
         action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
         if not torch.isfinite(action_mean).all(): raise RuntimeError("Actor mean has non-finite values")
@@ -72,13 +72,17 @@ class ContinuousStochasticPolicy(ContinuousPolicy, StochasticPolicy):
             action_log_std.unsqueeze_(-1)
         return action_mean, action_log_std
     
-    def evaluate_log_prob(self, action_distributions : tuple[torch.Tensor, torch.Tensor], action : torch.Tensor)-> torch.Tensor:
+    def evaluate_log_prob(self, action_distributions : tuple[torch.Tensor, torch.Tensor], action : torch.Tensor, u_sampled = None, **kwargs)-> torch.Tensor:
         mean, log_std = action_distributions
         std = log_std.exp()
 
-        # map action back to (-1,1) then to u-space
-        a_tanh = ((action - self.loc) / (self.scale + self.EPS)).clamp(-1 + self.EPS, 1 - self.EPS)
-        u = self._atanh(a_tanh)
+        if u_sampled is not None:
+            a_tanh = torch.tanh(u_sampled)
+            u = u_sampled
+        else:
+            # map action back to (-1,1) then to u-space
+            a_tanh = ((action - self.loc) / self.scale).clamp(-1 + self.EPS, 1 - self.EPS)
+            u = self._atanh(a_tanh)
 
         base = torch.distributions.Normal(mean, std)
         log_prob_u = base.log_prob(u).sum(dim=-1)
@@ -96,7 +100,10 @@ class ContinuousStochasticPolicy(ContinuousPolicy, StochasticPolicy):
         u = action_mean + action_std * torch.randn_like(action_mean)  # reparam/sample
         action = self._squash(u) # [1,A]
         
-        log_prob = self.evaluate_log_prob(action_distributions= (action_mean, action_log_std), action=action)
+        log_prob = self.evaluate_log_prob(action_distributions= (action_mean, action_log_std), action=action, u_sampled = u)
+        if (abs(log_prob) > 1000).any():
+            print("Catch")
+            # self.pick_action(self, state=state)
         return action, log_prob
         # shape [batch]
 

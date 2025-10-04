@@ -1,7 +1,7 @@
 from rl_agents.agent import Agent, BaseAgent
 from rl_agents.service import AgentService
 from rl_agents.memory.memory import Memory
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 
 from abc import ABCMeta
 from typing import Protocol, runtime_checkable

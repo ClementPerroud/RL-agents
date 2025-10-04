@@ -1,4 +1,4 @@
-from rl_agents.value_functions.dqn_function import Q
+from rl_agents.value_functions.q import Q
 from rl_agents.value_functions.value import Op
 from rl_agents.memory.memory import Experience, Memory
 from rl_agents.memory.sampler import RandomSampler
@@ -32,7 +32,7 @@ class BaseC51(AgentService, ABC):
         self.atom_config = LinearAtomConfig(nb_atoms=nb_atoms, v_min=v_min, v_max=v_max)
         
 
-class ContinuousC51Wrapper(BaseC51, Q, AgentService):
+class ContinuousC51QWrapper(BaseC51, Q, AgentService):
     def __init__(self,
             core_net : torch.nn.Module,
             action_space : gym.spaces.Box,

@@ -6,7 +6,7 @@ from rl_agents.memory.rollout_memory import RolloutMemory
 from rl_agents.memory.replay_memory import ReplayMemory
 from rl_agents.critics.advantage_function import BaseAdvantageFunction
 from rl_agents.utils.hidden_modules import HiddenModulesUtilsMixin
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 
 from abc import ABCMeta, abstractmethod
 import torch

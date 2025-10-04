@@ -11,7 +11,7 @@ from rl_agents.trainers.mixin.value_critic import QCriticTrainerMixin
 
 from rl_agents.utils.mode import eval_mode, train_mode
 from rl_agents.utils.distribution.distribution import Distribution, distribution_aware, debug_mode, distribution_mode
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 
 import torch
 from typing import Union

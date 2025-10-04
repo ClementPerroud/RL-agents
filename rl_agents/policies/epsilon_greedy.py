@@ -1,7 +1,7 @@
 from rl_agents.agent import BaseAgent
 from rl_agents.service import AgentService
 from rl_agents.policies.policy import Policy, DiscretePolicy
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 from rl_agents.utils.wrapper import Wrapper
 
 import numpy as np
@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from gymnasium.spaces import Space
 import math
 
-class BaseEspilonGreedyPolicyWrapper(Wrapper, Policy, AgentService, ABC):
+class BaseEpsilonGreedyPolicyWrapper(Wrapper, Policy, AgentService, ABC):
     def __init__(self, policy : Policy, action_space: Space, epsilon = 1.0):
         super().__init__()
         self.policy = assert_is_instance(policy, Policy)
@@ -54,7 +54,7 @@ class BaseEspilonGreedyPolicyWrapper(Wrapper, Policy, AgentService, ABC):
         self.epsilon = self.epsilon_function(agent=agent)
 
 
-class EspilonGreedyPolicyWrapper(BaseEspilonGreedyPolicyWrapper):
+class EpsilonGreedyPolicyWrapper(BaseEpsilonGreedyPolicyWrapper):
     def __init__(self, policy : Policy, epsilon_decay: int, action_space: Space, end_epsilon: float, start_epsilon : float = 1):
         super().__init__(policy= policy, action_space=action_space, epsilon= start_epsilon)
         self.epsilon_decay = epsilon_decay

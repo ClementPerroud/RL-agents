@@ -1,7 +1,7 @@
 from rl_agents.policies.policy import Policy
 from rl_agents.value_functions.value import Q, Op
 from rl_agents.utils.hidden_modules import HiddenModulesUtilsMixin
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 import numpy as np
 import torch
 

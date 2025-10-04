@@ -1,4 +1,6 @@
 from rl_agents.memory.memory import EditableMemory, MemoryField, BaseExperienceMemory
+from rl_agents.policies.policy import Policy, StochasticPolicy
+from rl_agents.utils.check import is_instance
 
 from abc import ABC, abstractmethod
 from collections import deque, namedtuple
@@ -23,10 +25,10 @@ class ReplayMemory(BaseExperienceMemory):
         ), "ReplayMemory only supports gymnasium.spaces.Box as observation_space"
         self.observation_space = observation_space
         self.action_space = action_space
-
+            
         super().__init__(
             max_length=max_length,
-            fields=[
+            fields= [
                 MemoryField("state",       self.observation_space.shape,    torch.float32),
                 MemoryField("action",      self.action_space.shape,         torch.float32),
                 MemoryField("next_state",  self.observation_space.shape,    torch.float32),

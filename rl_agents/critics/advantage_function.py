@@ -5,7 +5,7 @@ from rl_agents.memory.memory import MemoryField
 from rl_agents.memory.codec import AutomaticCodecFactory
 from rl_agents.utils.collates import do_nothing_collate
 from rl_agents.utils.distribution.distribution import Distribution, distribution_aware, distribution_mode
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 
 from rl_agents.actor_critic_agent import ActorCriticAgent
 

@@ -3,7 +3,7 @@ from rl_agents.memory.memory import Experience
 from rl_agents.actor_critic_agent import ActorCriticAgent
 from rl_agents.trainers.mixin.on_policy import OnPolicyTrainerMixin
 from rl_agents.utils.distribution.distribution import Distribution, distribution_aware, distribution_mode, debug_mode
-from rl_agents.utils.assert_check import assert_is_instance
+from rl_agents.utils.check import assert_is_instance
 
 import torch
 import numpy as np
@@ -36,8 +36,7 @@ class PPOTrainer(OnPolicyTrainerMixin):
     def set_up_and_check(self, agent : "ActorCriticAgent"):
         super().set_up_and_check(agent)
         
-        assert_is_instance(agent.actor, StochasticPolicy)
-        self.policy : Union[StochasticPolicy, torch.nn.Module] = agent.actor
+        self.policy : Union[StochasticPolicy, torch.nn.Module] = assert_is_instance(agent.actor, StochasticPolicy)
 
         self.optimizer = torch.optim.Adam(
             params=agent.parameters(),

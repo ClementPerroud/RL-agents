@@ -8,7 +8,7 @@ if __name__ == "__main__":
     sys.path.insert(0, parentdir) 
 
 from rl_agents.policies.stochastic_policy import DiscreteStochasticPolicy
-from rl_agents.value_functions.dvn_function import VWrapper
+from rl_agents.value_functions.v import VWrapper
 from rl_agents.critics.advantage_function import GAEFunction
 
 from rl_agents.actor_critic_agent import ActorCriticAgent

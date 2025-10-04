@@ -39,7 +39,7 @@ class DiscretePolicy(AgentService, Policy, ABC):
         return self.head(x)
 
 class ContinuousPolicy(AgentService, Policy, ABC):
-    LOG_STD_MIN, LOG_STD_MAX = -2, 5
+    LOG_STD_MIN, LOG_STD_MAX = -5, 2
     EPS = 1E-6
     def __init__(self, core_net : torch.nn.Module, action_space : gym.spaces.Box, **kwargs):
         assert isinstance(action_space, gym.spaces.Box), "action_space only support gym.spaces.Box"
