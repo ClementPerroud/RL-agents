@@ -108,8 +108,9 @@ def main():
         observation_space=observation_space,
         action_space=action_space
     )
-
+    agent.to("cpu")
     agent.train()
+
     episodes = 500
     for i in range(episodes):
         episode_rewards = 0
@@ -131,13 +132,13 @@ def main():
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()
 
-            if loss is not None: episode_losses.append(loss)
+            if loss is not None: episode_losses.append([l.item() for l in loss])
             
             episode_steps += 1
             state = next_state
 
         episode_loss = np.array(episode_losses).mean(axis=0) if len(episode_losses) > 0 else np.nan
-        print(f"Episode {agent.nb_episode:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step}")
+        print(f"Episode {agent.nb_episode:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step} | Total duration : {agent.duration()}")
         
         # if len(replay_memory) > 1_000 and agent.nb_episode % 30 == 0:
         #     plot_q_distribution(c51dqn=q_function, replay_memory=replay_memory, n=1_000)

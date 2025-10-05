@@ -18,6 +18,7 @@ class MemoryField (NamedTuple):
 class Memory[T](Protocol):
     max_length : int
     fields : list[MemoryField]
+    device : torch.DeviceObjType
     def store(self, **kwargs) -> tuple[torch.Tensor, object]:...
     def reset(self): ...
     def __len__(self) -> int : ...
@@ -34,12 +35,10 @@ class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
         self,
         max_length: int,
         fields: list[MemoryField],
-        device: torch.DeviceObjType = None,
         **kwargs
     ):
         super().__init__(**kwargs)
         self.max_length = int(max_length)
-        self.device = device
 
 
         self.fields : list[MemoryField] = []
@@ -53,6 +52,13 @@ class BaseExperienceMemory(torch.nn.Module, EditableMemory[Experience]):
 
         self._generate_dataclasses()
         self.i = 0
+    
+    @property
+    def device(self) -> torch.DeviceObjType:
+        try:
+            return next(self.buffers()).device
+        except StopIteration:
+            return torch.device("cpu")
 
     @property
     def names(self) -> list[str]:

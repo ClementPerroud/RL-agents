@@ -93,8 +93,9 @@ def main():
         observation_space=observation_space,
         action_space=action_space
     )
-
+    agent.to("cuda")
     agent.train()
+
     episodes = 10000
     for i in range(episodes):
         episode_rewards = 0
@@ -122,7 +123,7 @@ def main():
             state = next_state
 
         episode_loss = np.array(episode_losses).mean(axis=0) if len(episode_losses) > 0 else np.nan
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step} | Total duration : {agent.duration()}")
         
         # if len(replay_memory) > 1_000 and agent.nb_episode % 30 == 0:
         #     plot_q_distribution(

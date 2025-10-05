@@ -42,8 +42,8 @@ class RandomSampler(AgentService, Sampler):
         self.replay_memory = replay_memory
 
     @torch.no_grad()
-    def sample(self, batch_size : int): 
-        return torch.randint(0, len(self.replay_memory), (batch_size,))
+    def sample(self, batch_size : int):
+        return torch.randint(0, len(self.replay_memory), (batch_size,), device=self.replay_memory.device)
 
     
 
@@ -59,8 +59,8 @@ class LastSampler(AgentService, Sampler):
 
 
 class PrioritizedReplaySampler(AgentService, UpdatableSampler, WeightableSampler, Sampler):
-    def __init__(self, replay_memory: "BaseExperienceMemory", alpha=0.65, beta_0=0.5, duration=150_000):
-        super().__init__()
+    def __init__(self, replay_memory: "BaseExperienceMemory", alpha=0.65, beta_0=0.5, duration=150_000, **kwargs):
+        super().__init__(**kwargs)
         self.replay_memory = replay_memory
         self.alpha = alpha
         self.beta_0 = beta_0
@@ -77,7 +77,7 @@ class PrioritizedReplaySampler(AgentService, UpdatableSampler, WeightableSampler
         if self.nb_step>=self.duration: return self.random_sampler.sample(batch_size=batch_size)
 
         indices = self.priorities.sample(batch_size=batch_size)
-        indices = torch.tensor(indices).long()
+        indices = torch.tensor(indices, device=self.replay_memory.device).long()
         return indices
     
     # Protocol : WeightableSampler

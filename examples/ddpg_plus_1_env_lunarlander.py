@@ -46,8 +46,6 @@ def main():
 
     NB_ENV = 1
     MEMORY_SIZE = 300_000
-    # NB_ATOMS = 51
-    # V_MIN, V_MAX = -250, 300
     GAMMA = 0.99
     HIDDEN_DIM = 128
     MULTI_STEP = 3
@@ -79,17 +77,6 @@ def main():
     )
     policy = ContinuousDeterministicPolicy(action_space=action_space, core_net=policy_core_net)
 
-    q_function = DQN(
-        net=q_net,
-        loss_fn= torch.nn.MSELoss(reduction="none"),
-        policy=EnsembleTargetWrapper(
-            service=policy,
-            target_strategy=DDPGStrategy(),
-            updater=updater
-        ),
-        gamma = GAMMA
-    )
-
     policy = OUNoiseWrapper(policy=policy, nb_env=NB_ENV, action_space=action_space)
     policy = EnsembleTargetWrapper(
         service=policy,
@@ -100,15 +87,17 @@ def main():
     agent = ActorCriticAgent(
         nb_env= NB_ENV,
         actor= policy,
-        critic= q_function,
+        critic= q_net,
         memory= replay_memory,
         trainer= DDPGTrainer(
             train_every=TRAIN_EVERY,
             batch_size=256,
             q_loss_fn=torch.nn.MSELoss(reduction="none"),
-            q_optimizer=torch.optim.Adam(params=q_function.parameters(), lr = 1E-3),
+            q_optimizer=torch.optim.Adam(params=q_net.parameters(), lr = 1E-3),
             policy_optimizer=torch.optim.Adam(params=policy.parameters(), lr = 1E-4),
-            sampler = PrioritizedReplaySampler(replay_memory=replay_memory, service=q_function, alpha=0.65, beta_0=0.5, duration=30_000)#RandomSampler(replay_memory=replay_memory)
+            sampler = PrioritizedReplaySampler(replay_memory=replay_memory, alpha=0.65, beta_0=0.5, duration=30_000),
+            gamma=GAMMA,
+            q_policy=policy
         ),
         observation_space=observation_space,
         action_space=action_space
@@ -129,8 +118,6 @@ def main():
 
             next_state, reward, done, truncated, infos = env.step(action = action)
             episode_rewards += reward
-            # print(state, action, reward, next_state, done, truncated)
-            done = done or truncated
 
             agent.store(state = state, action = action, reward = reward, next_state = next_state, done = done, truncated=truncated)
             loss = agent.train_agent()
@@ -141,7 +128,7 @@ def main():
             state = next_state
 
         episode_loss = np.array(episode_losses).mean(0)
-        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step}")
+        print(f"Episode {i:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step} | Total duration : {agent.duration()}")
         # print(episode_losses)
 
         # if episode_rewards >= 500:

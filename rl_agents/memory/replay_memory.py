@@ -18,7 +18,6 @@ class ReplayMemory(BaseExperienceMemory):
         max_length: int,
         observation_space: Space,
         action_space : Space,
-        device: torch.DeviceObjType = None,
     ):
         assert isinstance(
             observation_space, Box
@@ -35,8 +34,7 @@ class ReplayMemory(BaseExperienceMemory):
                 MemoryField("reward",      (),                              torch.float32),
                 MemoryField("done",        (),                              torch.bool),
                 MemoryField("truncated",   (),                              torch.bool),
-            ],
-            device=device,
+            ]
         )
 
 
@@ -53,8 +51,7 @@ class MultiStepReplayMemory(BaseExperienceMemory):
         action_space : Space,
         nb_env: int,
         gamma: float,
-        multi_step: int,
-        device: torch.DeviceObjType = None,
+        multi_step: int
     ):
         warnings.warn(
             f"When using {self.__class__.__name__}, please provide the multi_step parameter "
@@ -62,7 +59,7 @@ class MultiStepReplayMemory(BaseExperienceMemory):
         )
         assert isinstance(observation_space, Box)
         self.multi_step, self.gamma, self.nb_env = multi_step, gamma, nb_env
-        self.buffers = [deque(maxlen=multi_step) for _ in range(nb_env)]
+        self.env_buffers = [deque(maxlen=multi_step) for _ in range(nb_env)]
         self.action_space = action_space
 
         super().__init__(
@@ -74,20 +71,22 @@ class MultiStepReplayMemory(BaseExperienceMemory):
                 MemoryField("reward",      (),                          torch.float32),
                 MemoryField("done",        (),                          torch.bool),
                 MemoryField("truncated",   (),                          torch.bool),
-            ],
-            device=device,
+            ]
         )
 
-        # pré-calc γ^k pour l’agrégation vectorielle
-        self._gammas = gamma ** torch.arange(
-            multi_step, device=device, dtype=torch.float32
-        )
+        self._gammas = None
 
     def _aggregate(self, buf: deque):
         """
         Convertit le contenu d'un deque en transition n-step.
         -> retourne un dict prêt pour super().store(**transition)
         """
+
+        if self._gammas is None:# Lazy initialization of self._gammas to ensure device is consistent.
+            self._gammas = self.gamma ** torch.arange(
+                self.multi_step, device=self.device, dtype=torch.float32
+            )
+
         # Empile récompenses pour un produit scalaire vectoriel
         r = torch.stack([e.reward for e in buf])  # (L,)
         R = torch.dot(self._gammas[: len(r)], r)  # scalaire  γ^k * r_k
@@ -114,7 +113,7 @@ class MultiStepReplayMemory(BaseExperienceMemory):
             kwargs_env = {key : val[env_id] for key, val in kwargs.items()}
             experience_env = self.__compute_experience_from_values__(**kwargs_env)
 
-            buf = self.buffers[env_id]
+            buf = self.env_buffers[env_id]
             buf.append(experience_env) # We use tensor[env_id:env_id+1] to select the one elem corresponding 
 
             # fenêtre pleine : pousse une transition n-step

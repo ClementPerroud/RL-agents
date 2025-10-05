@@ -103,6 +103,8 @@ def main():
         observation_space=observation_space,
         action_space=action_space
     )
+    agent.to("cuda")
+    agent.train()
 
     episodes = 1000
     for i in range(episodes):
@@ -129,7 +131,7 @@ def main():
             state = next_state
 
         episode_loss = np.array(episode_losses).mean(axis=0) if len(episode_losses) > 0 else None
-        print(f"Episode {agent.nb_episode:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step}")
+        print(f"Episode {agent.nb_episode:3d} - Steps : {episode_steps:4d} | Total Rewards : {episode_rewards:7.2f} | Loss : {episode_loss} | Agent Step : {agent.nb_step} | Total duration : {agent.duration()}")
         # print(episode_losses)
 
         # if episode_rewards >= 500:

@@ -104,7 +104,7 @@ class SACTrainer(OffPolicyTrainerMixin, QCriticTrainerMixin):
         if alpha_loss.item() > 1:
             print("Catch")
 
-        return critic_loss, actor_loss.item(), alpha_loss.item()
+        return critic_loss.detach(), actor_loss.detach(), alpha_loss.detach()
     
     from collections import deque
     _alpha_losses = deque(maxlen=1000)

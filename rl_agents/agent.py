@@ -31,13 +31,14 @@ class BaseAgent(Agent, Policy, AgentService, ABC):
         self.nb_episode = 0
         self.nb_step = 0
         self.start_time = time.time()
+        self.debug_mode = False
 
     @abstractmethod
     def train_agent(self):
         assert self.training, "Please set the agent in training mode using .train()"
 
     def step(self, **kwargs):
-        self.nb_step += 1
+        if self.training: self.nb_step += self.nb_env
         self.__update__(**kwargs)
         if any([key in kwargs for key in ["done", "truncated", "terminated"]]):
             done : np.ndarray = torch.as_tensor(kwargs.get("done", False))
@@ -48,11 +49,11 @@ class BaseAgent(Agent, Policy, AgentService, ABC):
             if need_reset.any():
                 env_ids = torch.nonzero(need_reset, as_tuple=False).squeeze(-1)
                 self.__reset__(env_ids = env_ids)
-                self.nb_episode += int(env_ids.numel())
+                if self.training: self.nb_episode += int(env_ids.numel())
             
-
     def pick_action(self, state : np.ndarray):
-        state = torch.as_tensor(state, dtype=torch.float32)
+        device = next(self.parameters()).device
+        state = torch.as_tensor(state, dtype=torch.float32, device=device)
 
         single_env_condition = self.nb_env == 1 and (state.shape[0] != 1 or state.ndim == 1)
 
@@ -65,8 +66,8 @@ class BaseAgent(Agent, Policy, AgentService, ABC):
             elif isinstance(pick_action_return, tuple): pick_action_return = tuple([elem.squeeze(0) for elem in pick_action_return])
             else: raise ValueError("Pick action must be a Tensor or a tuple of Tensor")
 
-        if isinstance(pick_action_return, torch.Tensor): pick_action_return = pick_action_return.detach().numpy()
-        elif isinstance(pick_action_return, tuple): pick_action_return = tuple([elem.detach().numpy() for elem in pick_action_return])
+        if isinstance(pick_action_return, torch.Tensor): pick_action_return = pick_action_return.detach().cpu().numpy()
+        elif isinstance(pick_action_return, tuple): pick_action_return = tuple([elem.detach().cpu().numpy() for elem in pick_action_return])
         else: raise ValueError("Pick action must be a Tensor or a tuple of Tensor")
 
         return pick_action_return

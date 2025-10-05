@@ -83,7 +83,7 @@ class DDPGTrainer(OffPolicyTrainerMixin, QCriticTrainerMixin):
         self.policy_optimizer.step()
         self.q_function.requires_grad_(True)
 
-        return critic_loss, actor_loss.item()
+        return critic_loss.detach(), actor_loss.detach()
 
     def sample_pre_hook(self):
         return self.dqn_trainer.sample_pre_hook()

@@ -28,7 +28,7 @@ class DQNTrainer(
             gamma : float,
             q_policy : Policy,
             *args, **kwargs):
-        super().__init__(sampler=sampler, train_every=train_every, batch_size=batch_size)
+        super().__init__(sampler=sampler, train_every=train_every, batch_size=batch_size, **kwargs)
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.loss_fn.reduction = "none"
@@ -79,7 +79,7 @@ class DQNTrainer(
         if isinstance(self.sampler, UpdatableSampler):
             self.sampler.update_experiences(indices = experience.indices, weights = td_errors)
 
-        return q_loss.item()
+        return q_loss.detach()
 
     @distribution_aware
     def compute_loss(self, experience : ExperienceLike, return_loss = True, return_td_errors = True, alpha = None) -> torch.Tensor:

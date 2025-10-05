@@ -4,12 +4,13 @@ from collections.abc import Iterable
 epsilon = 1e-6  # strictly positive clamp
 
 
-class SumTree:
+class SumTree(torch.nn.Module):
     """
     Flat-array SumTree for Prioritized Experience Replay (PER), using torch tensors.
     """
 
-    def __init__(self, size: int, dtype: torch.dtype = torch.float32):
+    def __init__(self, size: int, dtype: torch.dtype = torch.float32, **kwargs):
+        super().__init__(**kwargs)
         if not isinstance(size, int) or size <= 0:
             raise ValueError("size must be a strictly positive integer")
 
@@ -19,10 +20,12 @@ class SumTree:
 
         # One contiguous tensor for the entire tree (internal + leaves)
         # We keep it on CPU and out of autograd on purpose.
-        self.tree = torch.zeros(2 * self.size - 1, dtype=dtype)
-        self.tree.requires_grad_(False)
+        self.register_buffer("tree", torch.zeros(2 * self.size - 1, dtype=dtype))
 
     # ----------------------------- helpers ---------------------------------
+    @property
+    def device(self):
+        return self.tree.device
 
     @torch.no_grad()
     def _update_leaf(self, leaf_pos: int, new_p: float) -> None:
@@ -31,7 +34,7 @@ class SumTree:
 
         # Clamp to strictly positive to avoid dead leaves
         v = float(new_p)
-        if not torch.isfinite(torch.tensor(v)):
+        if not torch.isfinite(torch.tensor(v, device=self.device)):
             raise ValueError(f"priority must be finite, got {v}")
         if v <= 0:
             v = epsilon
@@ -58,8 +61,8 @@ class SumTree:
         """
         # Vector/batch case
         if isinstance(idx, (list, tuple)) or (isinstance(idx, torch.Tensor) and idx.ndim >= 1):
-            idx_t = torch.as_tensor(idx, dtype=torch.long)
-            val_t = torch.as_tensor(value, dtype=self.tree.dtype)
+            idx_t = torch.as_tensor(idx, dtype=torch.long, device=self.device)
+            val_t = torch.as_tensor(value, dtype=self.tree.dtype, device=self.device)
             if idx_t.shape != val_t.shape:
                 raise ValueError("index and value must have the same shape")
             for i, v in zip(idx_t.tolist(), val_t.tolist()):
@@ -78,7 +81,7 @@ class SumTree:
         Returns torch.Tensor for vector input, Python float for scalar.
         """
         if isinstance(idx, (list, tuple)) or (isinstance(idx, torch.Tensor) and idx.ndim >= 1):
-            idx_t = torch.as_tensor(idx, dtype=torch.long)
+            idx_t = torch.as_tensor(idx, dtype=torch.long, device = self.tree.device)
             leaf_idx = self.leaf_start + idx_t
             return self.tree.index_select(0, leaf_idx)
         else:
